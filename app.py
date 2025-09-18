@@ -1,9 +1,20 @@
 import streamlit as st
 import pandas as pd
-# 【核心改動】不在檔案開頭匯入 matplotlib
-# import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
 import platform
 import re
+
+# --- 設定 Matplotlib 以正確顯示中文 ---
+try:
+    if platform.system() == 'Windows':
+        plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei']
+    elif platform.system() == 'Darwin': # macOS
+        plt.rcParams['font.sans-serif'] = ['PingFang TC']
+    else: # Linux or other
+        plt.rcParams['font.sans-serif'] = ['WenQuanYi Zen Hei']
+    plt.rcParams['axes.unicode_minus'] = False
+except Exception as e:
+    st.warning(f"中文字體設定失敗，圖表中的中文可能無法正常顯示。錯誤：{e}")
 
 # --- 文字處理函式 ---
 def format_and_highlight_text(text, keywords):
@@ -27,10 +38,14 @@ def format_and_highlight_text(text, keywords):
         )
     return html_output
 
+# --- Streamlit 應用程式介面 ---
+st.set_page_config(page_title="學校選校器", layout="centered")
+st.title('🏫 學校選校器')
+st.write("請先上傳您的學校資料檔案，然後使用下方的篩選器來尋找心儀的學校。")
+
 # --- 核心功能函式 (處理資料) ---
 @st.cache_data
 def process_dataframe(df):
-    # (此函式與之前版本相同)
     text_columns_for_features = [
         '學校關注事項', '學習和教學策略', '小學教育課程更新重點的發展', '共通能力的培養', '正確價值觀、態度和行為的培養',
         '全校參與照顧學生的多樣性', '全校參與模式融合教育', '非華語學生的教育支援', '課程剪裁及調適措施',
@@ -64,11 +79,7 @@ def process_dataframe(df):
             df[new_name] = df[col].apply(lambda x: '是' if str(x).strip() in ['有', 'Yes'] else '否')
     return df
 
-# --- Streamlit 應用程式介面 ---
-st.set_page_config(page_title="學校選校器", layout="centered")
-st.title('🏫 學校選校器')
-st.write("請先上傳您的學校資料檔案，然後使用下方的篩選器來尋找心儀的學校。")
-
+# --- 檔案上傳器 ---
 uploaded_file = st.file_uploader("**請上傳您的學校資料檔案 (Excel 或 CSV)**", type=['csv', 'xlsx'])
 
 if uploaded_file is not None:
@@ -153,26 +164,36 @@ if uploaded_file is not None:
                 with col2:
                     if diff >= 0: st.metric("全校教師總人數", f"{total_teachers} 人", f"+{diff}", delta_color="normal")
                     else: st.metric("全校教師總人數", f"{total_teachers} 人", f"{diff}", delta_color="inverse")
-                
-                # 【核心改動】將 matplotlib 的載入和設定移到這裡
-                with st.spinner('正在產生圖表...'):
-                    import matplotlib.pyplot as plt
-                    try:
-                        if platform.system() == 'Windows': plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei']
-                        elif platform.system() == 'Darwin': plt.rcParams['font.sans-serif'] = ['PingFang TC']
-                        else: plt.rcParams['font.sans-serif'] = ['Noto Sans CJK JP']
-                        plt.rcParams['axes.unicode_minus'] = False
-                    except Exception: pass # 如果字體設定失敗，仍然繼續
-
-                    st.markdown("#### 📊 師資比例分佈圖"); pie_col1, pie_col2 = st.columns(2)
-                    with pie_col1:
-                        st.markdown("**學歷分佈**"); edu_labels = ['學士', '碩士或以上']; edu_sizes = [school.get('學士(佔全校教師人數%)', 0), school.get('碩士、博士或以上 (佔全校教師人數%)', 0)]
-                        if sum(edu_sizes) > 0: fig1, ax1 = plt.subplots(figsize=(3, 3)); ax1.pie(edu_sizes, labels=edu_labels, autopct='%1.1f%%', startangle=90, colors=['#66b3ff','#99ff99']); ax1.axis('equal'); st.pyplot(fig1)
-                        else: st.text("無相關數據")
-                    with pie_col2:
-                        st.markdown("**年資分佈**"); exp_labels = ['0-4年', '5-9年', '10年以上']; exp_sizes = [school.get('0-4年資 (佔全校教師人數%)', 0), school.get('5-9年資(佔全校教師人數%)', 0), school.get('10年或以上年資 (佔全校教師人數%)', 0)]
-                        if sum(exp_sizes) > 0: fig2, ax2 = plt.subplots(figsize=(3, 3)); ax2.pie(exp_sizes, labels=exp_labels, autopct='%1.1f%%', startangle=90, colors=['#ffcc99','#c2c2f0','#ffb3e6']); ax2.axis('equal'); st.pyplot(fig2)
-                        else: st.text("無相關數據")
-
+                st.markdown("#### 📊 師資比例分佈圖"); pie_col1, pie_col2 = st.columns(2)
+                with pie_col1:
+                    st.markdown("**學歷分佈**"); edu_labels = ['學士', '碩士或以上']; edu_sizes = [school.get('學士(佔全校教師人數%)', 0), school.get('碩士、博士或以上 (佔全校教師人數%)', 0)]
+                    if sum(edu_sizes) > 0: fig1, ax1 = plt.subplots(figsize=(3, 3)); ax1.pie(edu_sizes, labels=edu_labels, autopct='%1.1f%%', startangle=90, colors=['#66b3ff','#99ff99']); ax1.axis('equal'); st.pyplot(fig1)
+                    else: st.text("無相關數據")
+                with pie_col2:
+                    st.markdown("**年資分佈**"); exp_labels = ['0-4年', '5-9年', '10年以上']; exp_sizes = [school.get('0-4年資 (佔全校教師人數%)', 0), school.get('5-9年資(佔全校教師人數%)', 0), school.get('10年或以上年資 (佔全校教師人數%)', 0)]
+                    if sum(exp_sizes) > 0: fig2, ax2 = plt.subplots(figsize=(3, 3)); ax2.pie(exp_sizes, labels=exp_labels, autopct='%1.1f%%', startangle=90, colors=['#ffcc99','#c2c2f0','#ffb3e6']); ax2.axis('equal'); st.pyplot(fig2)
+                    else: st.text("無相關數據")
                 st.markdown("---"); st.markdown("#### 📚 課業與評估安排")
-                homework_details = {"小一測驗/考試次數": f"{school.get('一年級全年全科測驗次數', 'N/A')} / {school.get('一年級全年全科考試次數', 'N/A')}", "高年級測驗/考試次數": f"{school.get('二至六年級全年全科測驗次數', 'N/A')} / {school.get('二至六年級全年全科考試次數', 'N/A')}", "小一免試評估": school.get('p1_no_exam_assessment', 'N/A'), "多元學習評估": school.get('多元學習評估', '未提供'), "避免長假後測考": school.get('avoid_holiday_exams', 'N/A'), "下午導修時段": school.get('afternoon_tutorial', '
+                
+                # 【核心修正】修正了此處的字串，確保它被正確終止
+                homework_details = {
+                    "小一測驗/考試次數": f"{school.get('一年級全年全科測驗次數', 'N/A')} / {school.get('一年級全年全科考試次數', 'N/A')}",
+                    "高年級測驗/考試次數": f"{school.get('二至六年級全年全科測驗次數', 'N/A')} / {school.get('二至六年級全年全科考試次數', 'N/A')}",
+                    "小一免試評估": school.get('p1_no_exam_assessment', 'N/A'),
+                    "多元學習評估": school.get('多元學習評估', '未提供'),
+                    "避免長假後測考": school.get('avoid_holiday_exams', 'N/A'),
+                    "下午導修時段": school.get('afternoon_tutorial', 'N/A')
+                }
+
+                for title, value in homework_details.items():
+                    if pd.notna(value) and str(value).strip() != '': st.write(f"**{title}:** {value}")
+                st.markdown("---"); st.markdown("#### ✨ 辦學特色與發展計劃")
+                feature_text_map = {"學校關注事項": "學校關注事項", "學習和教學策略": "學習和教學策略", "小學教育課程更新重點的發展": "課程更新重點", "共通能力的培養": "共通能力培養", "正確價值觀、態度和行為的培養": "價值觀培養", "全校參與照顧學生的多樣性": "照顧學生多樣性", "全校參與模式融合教育": "融合教育模式", "非華語學生的教育支援": "非華語學生支援", "課程剪裁及調適措施": "課程剪裁調適", "家校合作": "家校合作", "校風": "校風", "學校發展計劃": "學校發展計劃", "教師專業培訓及發展": "教師專業發展", "其他未來發展": "其他未來發展"}
+                for column_name, display_title in feature_text_map.items():
+                    detail_value = school.get(column_name, '');
+                    if pd.notna(detail_value) and str(detail_value).strip() not in ['', '-']:
+                        st.write(f"**{display_title}:**"); formatted_content = format_and_highlight_text(detail_value, all_selected_keywords_for_highlight); st.markdown(formatted_content, unsafe_allow_html=True)
+    except Exception as e:
+        st.error(f"檔案處理失敗：{e}")
+else:
+    st.info("請先上傳檔案，篩選器將會在此處顯示。")
