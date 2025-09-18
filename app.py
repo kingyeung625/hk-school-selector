@@ -1,20 +1,30 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 import platform
 import re
+import os
 
-# --- 設定 Matplotlib 以正確顯示中文 ---
-try:
-    if platform.system() == 'Windows':
-        plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei']
-    elif platform.system() == 'Darwin': # macOS
-        plt.rcParams['font.sans-serif'] = ['PingFang TC']
-    else: # Linux or other
-        plt.rcParams['font.sans-serif'] = ['WenQuanYi Zen Hei']
+# --- 【核心修正】設定 Matplotlib 直接使用我們提供的字體檔案 ---
+# 檢查字體檔案是否存在
+FONT_FILE = 'NotoSansTC-Regular.otf'
+if os.path.exists(FONT_FILE):
+    # 如果存在，就設定為預設字體
+    plt.rcParams['font.family'] = fm.FontProperties(fname=FONT_FILE).get_name()
     plt.rcParams['axes.unicode_minus'] = False
-except Exception as e:
-    st.warning(f"中文字體設定失敗，圖表中的中文可能無法正常顯示。錯誤：{e}")
+else:
+    # 如果找不到，則嘗試備用方案
+    try:
+        if platform.system() == 'Windows':
+            plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei']
+        elif platform.system() == 'Darwin':
+            plt.rcParams['font.sans-serif'] = ['PingFang TC']
+        else:
+            plt.rcParams['font.sans-serif'] = ['Noto Sans CJK JP']
+        plt.rcParams['axes.unicode_minus'] = False
+    except Exception as e:
+        st.warning(f"警告：未找到指定的 NotoSansTC-Regular.otf 字體檔案，且備用系統字體設定失敗。圖表中的中文可能無法正常顯示。")
 
 # --- 文字處理函式 ---
 def format_and_highlight_text(text, keywords):
@@ -37,11 +47,6 @@ def format_and_highlight_text(text, keywords):
             flags=re.IGNORECASE
         )
     return html_output
-
-# --- Streamlit 應用程式介面 ---
-st.set_page_config(page_title="學校選校器", layout="centered")
-st.title('🏫 學校選校器')
-st.write("請先上傳您的學校資料檔案，然後使用下方的篩選器來尋找心儀的學校。")
 
 # --- 核心功能函式 (處理資料) ---
 @st.cache_data
@@ -79,7 +84,11 @@ def process_dataframe(df):
             df[new_name] = df[col].apply(lambda x: '是' if str(x).strip() in ['有', 'Yes'] else '否')
     return df
 
-# --- 檔案上傳器 ---
+# --- Streamlit 應用程式介面 ---
+st.set_page_config(page_title="學校選校器", layout="centered")
+st.title('🏫 學校選校器')
+st.write("請先上傳您的學校資料檔案，然後使用下方的篩選器來尋找心儀的學校。")
+
 uploaded_file = st.file_uploader("**請上傳您的學校資料檔案 (Excel 或 CSV)**", type=['csv', 'xlsx'])
 
 if uploaded_file is not None:
@@ -174,17 +183,7 @@ if uploaded_file is not None:
                     if sum(exp_sizes) > 0: fig2, ax2 = plt.subplots(figsize=(3, 3)); ax2.pie(exp_sizes, labels=exp_labels, autopct='%1.1f%%', startangle=90, colors=['#ffcc99','#c2c2f0','#ffb3e6']); ax2.axis('equal'); st.pyplot(fig2)
                     else: st.text("無相關數據")
                 st.markdown("---"); st.markdown("#### 📚 課業與評估安排")
-                
-                # 【核心修正】修正了此處的字串，確保它被正確終止
-                homework_details = {
-                    "小一測驗/考試次數": f"{school.get('一年級全年全科測驗次數', 'N/A')} / {school.get('一年級全年全科考試次數', 'N/A')}",
-                    "高年級測驗/考試次數": f"{school.get('二至六年級全年全科測驗次數', 'N/A')} / {school.get('二至六年級全年全科考試次數', 'N/A')}",
-                    "小一免試評估": school.get('p1_no_exam_assessment', 'N/A'),
-                    "多元學習評估": school.get('多元學習評估', '未提供'),
-                    "避免長假後測考": school.get('avoid_holiday_exams', 'N/A'),
-                    "下午導修時段": school.get('afternoon_tutorial', 'N/A')
-                }
-
+                homework_details = {"小一測驗/考試次數": f"{school.get('一年級全年全科測驗次數', 'N/A')} / {school.get('一年級全年全科考試次數', 'N/A')}", "高年級測驗/考試次數": f"{school.get('二至六年級全年全科測驗次數', 'N/A')} / {school.get('二至六年級全年全科考試次數', 'N/A')}", "小一免試評估": school.get('p1_no_exam_assessment', 'N/A'), "多元學習評估": school.get('多元學習評估', '未提供'), "避免長假後測考": school.get('avoid_holiday_exams', 'N/A'), "下午導修時段": school.get('afternoon_tutorial', 'N/A')}
                 for title, value in homework_details.items():
                     if pd.notna(value) and str(value).strip() != '': st.write(f"**{title}:** {value}")
                 st.markdown("---"); st.markdown("#### ✨ 辦學特色與發展計劃")
