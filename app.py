@@ -1,12 +1,12 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import plotly.express as px # 【核心改動】引入新的、更強大的繪圖工具
 import re
 import os
 
 # --- Streamlit 應用程式介面 ---
 st.set_page_config(page_title="學校選校器", layout="centered")
-st.title('🏫 學校選校器 (終極版 v2)')
+st.title('🏫 學校選校器 (終極版)')
 st.write("請先上傳您最新的學校資料檔案，然後使用下方的篩選器來尋找心儀的學校。")
 
 # --- 文字處理函式 ---
@@ -34,7 +34,7 @@ def format_and_highlight_text(text, keywords):
 # --- 核心功能函式 (處理資料) ---
 @st.cache_data
 def process_dataframe(df):
-    # (此函式與之前版本相同)
+    # 建立一個統一的“特色”欄位用於關鍵字搜尋
     text_columns_for_features = [
         '學校關注事項', '學習和教學策略', '小學教育課程更新重點的發展', '共通能力的培養', '正確價值觀、態度和行為的培養',
         '全校參與照顧學生的多樣性', '全校參與模式融合教育', '非華語學生的教育支援', '課程剪裁及調適措施',
@@ -42,6 +42,8 @@ def process_dataframe(df):
     ]
     existing_feature_columns = [col for col in text_columns_for_features if col in df.columns]
     df['features_text'] = df[existing_feature_columns].fillna('').astype(str).agg(' '.join, axis=1)
+
+    # 師資百分比處理
     percentage_cols = [
         '已接受師資培訓(佔全校教師人數%)', '學士(佔全校教師人數%)', '碩士、博士或以上 (佔全校教師人數%)', '特殊教育培訓 (佔全校教師人數%)',
         '0-4年資 (佔全校教師人數%)', '5-9年資(佔全校教師人數%)', '10年或以上年資 (佔全校教師人數%)'
@@ -51,6 +53,8 @@ def process_dataframe(df):
             s = pd.to_numeric(df[col].astype(str).str.replace('%', '', regex=False), errors='coerce').fillna(0)
             if not s.empty and s.max() > 0 and s.max() <= 1: s = s * 100
             df[col] = s.round(1)
+
+    # 師資及課業次數處理
     numeric_cols = [
         '核准編制教師職位數目', '全校教師總人數', '一年級全年全科測驗次數', '一年級全年全科考試次數',
         '二至六年級全年全科測驗次數', '二至六年級全年全科考試次數'
@@ -58,6 +62,8 @@ def process_dataframe(df):
     for col in numeric_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+            
+    # “是/否” 類型欄位處理
     yes_no_cols = {
         '小一上學期以多元化的進展性評估代替測驗及考試': 'p1_no_exam_assessment',
         '避免緊接在長假期後安排測考，讓學生在假期有充分的休息': 'avoid_holiday_exams',
@@ -68,6 +74,8 @@ def process_dataframe(df):
     for col, new_name in yes_no_cols.items():
         if col in df.columns:
             df[new_name] = df[col].apply(lambda x: '是' if str(x).strip().lower() in ['有', 'yes'] else '否')
+
+    # 升中關聯學校處理
     feeder_cols = ['一條龍中學', '直屬中學', '聯繫中學']
     existing_feeder_cols = [col for col in feeder_cols if col in df.columns]
     if existing_feeder_cols:
@@ -77,6 +85,7 @@ def process_dataframe(df):
         )
     else:
         df['has_feeder_school'] = '否'
+        
     return df
 
 # --- 檔案上傳器 ---
@@ -87,43 +96,17 @@ if uploaded_file is not None:
         if uploaded_file.name.endswith('.csv'): dataframe = pd.read_csv(uploaded_file, engine='python')
         else: dataframe = pd.read_excel(uploaded_file, engine='openpyxl')
         
-        # **【新功能】智能診斷**
-        st.markdown("---")
-        with st.expander("🔍 點擊查看檔案「健康檢查」報告"):
-            actual_columns = dataframe.columns.tolist()
-            st.write("**程式在您的檔案中偵測到的欄位列表：**")
-            st.code(actual_columns)
-            
-            # 定義所有程式需要的關鍵欄位
-            expected_columns = [
-                '學校名稱', '地區', '校網', '學校類別', '學生性別', '辦學團體', '宗教', 
-                '創校年份', '學校佔地面積', '一條龍中學', '直屬中學', '聯繫中學', '教學語言', 
-                '校車服務', '家教會', '學費_堂費_', '校監／學校管理委員會主席', '校長_',
-                '核准編制教師職位數目', '全校教師總人數', '已接受師資培訓(佔全校教師人數%)', 
-                '學士(佔全校教師人數%)', '碩士、博士或以上 (佔全校教師人數%)', 
-                '特殊教育培訓 (佔全校教師人數%)', '0-4年資 (佔全校教師人數%)', 
-                '5-9年資(佔全校教師人數%)', '10年或以上年資 (佔全校教師人數%)',
-                '一年級全年全科測驗次數', '一年級全年全科考試次數', 
-                '小一上學期以多元化的進展性評估代替測驗及考試'
-            ]
-
-            missing_cols = [col for col in expected_columns if col not in actual_columns]
-            
-            if not missing_cols:
-                st.success("✅ 檔案健康檢查通過！所有關鍵欄位都已找到。")
-            else:
-                st.error("⚠️ 注意：您的檔案缺少以下一個或多個關鍵欄位，這可能導致部分功能無法正常運作。")
-                st.code(missing_cols)
-                st.warning("請檢查您 Excel 檔案中的標題列，確保它們與上方「預期欄位」的名稱完全一致（包括空格和符號）。")
-        
         processed_df = process_dataframe(dataframe)
         st.success(f'成功讀取 {len(processed_df)} 筆學校資料！')
 
         # --- 步驟 2: 建立篩選器 ---
         active_filters = []
+
         with st.expander("📝 按學校名稱搜尋", expanded=True):
             search_keyword = st.text_input("**輸入學校名稱關鍵字：**")
             if search_keyword: active_filters.append(('name', search_keyword))
+
+        # **【新功能】範疇二：學校基本資料**
         with st.expander("ℹ️ 按學校基本資料搜尋", expanded=True):
             col1, col2 = st.columns(2)
             with col1:
@@ -145,7 +128,9 @@ if uploaded_file is not None:
                 feeder_choice = st.radio("有關聯中學？", ['不限', '是', '否'], horizontal=True, key='feeder')
                 if feeder_choice != '不限': active_filters.append(('feeder', feeder_choice))
                 bus_choice = st.radio("有校車服務？", ['不限', '是', '否'], horizontal=True, key='bus')
-                if bus_choice != '不限': active_filters.append(('bus', bus_choice))
+                if bus_choice != '不限' and 'has_school_bus' in filtered_df.columns:
+                    active_filters.append(('bus', bus_choice))
+        
         with st.expander("📍 按地區及校網搜尋", expanded=False):
             col1, col2 = st.columns(2)
             with col1:
@@ -189,8 +174,7 @@ if uploaded_file is not None:
             if afternoon_tut != '不限': active_filters.append(('afternoon_tut', afternoon_tut))
 
         # --- 步驟 3: 顯示最終結果 ---
-        st.markdown("---")
-        st.header(f"搜尋結果")
+        st.markdown("---"); st.header(f"搜尋結果")
         if not active_filters:
             st.info("☝️ 請使用上方的篩選器開始尋找學校。")
         else:
@@ -225,7 +209,7 @@ if uploaded_file is not None:
                 elif filter_type == 'afternoon_tut': filtered_df = filtered_df[filtered_df['afternoon_tutorial'] == value]
             st.info(f"綜合所有條件，共找到 {len(filtered_df)} 所學校。")
             for index, school in filtered_df.iterrows():
-                with st.expander(f"**{school.get('學校名稱', 'N/A')}** ({school.get('地區', 'N/A')})"):
+                with st.expander(f"**{school['學校名稱']}** ({school.get('地區', 'N/A')})"):
                     st.markdown("#### 📖 學校基本資料")
                     info_col1, info_col2 = st.columns(2)
                     with info_col1:
