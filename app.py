@@ -7,8 +7,9 @@ import re
 import os
 
 # --- 【核心修正】設定 Matplotlib 直接使用我們提供的字體檔案 ---
-# 檢查字體檔案是否存在
-FONT_FILE = 'NotoSansTC-Regular.otf'
+# 將字體檔案名稱更新為 .ttf
+FONT_FILE = 'NotoSansTC.ttf'
+
 if os.path.exists(FONT_FILE):
     # 如果存在，就設定為預設字體
     plt.rcParams['font.family'] = fm.FontProperties(fname=FONT_FILE).get_name()
@@ -24,7 +25,7 @@ else:
             plt.rcParams['font.sans-serif'] = ['Noto Sans CJK JP']
         plt.rcParams['axes.unicode_minus'] = False
     except Exception as e:
-        st.warning(f"警告：未找到指定的 NotoSansTC-Regular.otf 字體檔案，且備用系統字體設定失敗。圖表中的中文可能無法正常顯示。")
+        st.warning(f"警告：未找到指定的 {FONT_FILE} 字體檔案，且備用系統字體設定失敗。圖表中的中文可能無法正常顯示。")
 
 # --- 文字處理函式 ---
 def format_and_highlight_text(text, keywords):
