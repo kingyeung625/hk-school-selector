@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px # 【核心改動】引入新的、更強大的繪圖工具
+import plotly.express as px
 import re
 import os
 
@@ -34,7 +34,7 @@ def format_and_highlight_text(text, keywords):
 # --- 核心功能函式 (處理資料) ---
 @st.cache_data
 def process_dataframe(df):
-    # --- 建立一個統一的“特色”欄位用於關鍵字搜尋 ---
+    # 建立一個統一的“特色”欄位用於關鍵字搜尋
     text_columns_for_features = [
         '學校關注事項', '學習和教學策略', '小學教育課程更新重點的發展', '共通能力的培養', '正確價值觀、態度和行為的培養',
         '全校參與照顧學生的多樣性', '全校參與模式融合教育', '非華語學生的教育支援', '課程剪裁及調適措施',
@@ -43,7 +43,7 @@ def process_dataframe(df):
     existing_feature_columns = [col for col in text_columns_for_features if col in df.columns]
     df['features_text'] = df[existing_feature_columns].fillna('').astype(str).agg(' '.join, axis=1)
 
-    # --- 師資百分比處理 ---
+    # 師資百分比處理
     percentage_cols = [
         '已接受師資培訓(佔全校教師人數%)', '學士(佔全校教師人數%)', '碩士、博士或以上 (佔全校教師人數%)', '特殊教育培訓 (佔全校教師人數%)',
         '0-4年資 (佔全校教師人數%)', '5-9年資(佔全校教師人數%)', '10年或以上年資 (佔全校教師人數%)'
@@ -54,7 +54,7 @@ def process_dataframe(df):
             if not s.empty and s.max() > 0 and s.max() <= 1: s = s * 100
             df[col] = s.round(1)
 
-    # --- 師資及課業次數處理 ---
+    # 師資及課業次數處理
     numeric_cols = [
         '核准編制教師職位數目', '全校教師總人數', '一年級全年全科測驗次數', '一年級全年全科考試次數',
         '二至六年級全年全科測驗次數', '二至六年級全年全科考試次數'
@@ -63,7 +63,7 @@ def process_dataframe(df):
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
             
-    # --- “是/否” 類型欄位處理 ---
+    # “是/否” 類型欄位處理
     yes_no_cols = {
         '小一上學期以多元化的進展性評估代替測驗及考試': 'p1_no_exam_assessment',
         '避免緊接在長假期後安排測考，讓學生在假期有充分的休息': 'avoid_holiday_exams',
@@ -75,7 +75,7 @@ def process_dataframe(df):
         if col in df.columns:
             df[new_name] = df[col].apply(lambda x: '是' if str(x).strip() in ['有', 'Yes'] else '否')
 
-    # --- 升中關聯學校處理 ---
+    # 升中關聯學校處理
     feeder_cols = ['一條龍中學', '直屬中學', '聯繫中學']
     existing_feeder_cols = [col for col in feeder_cols if col in df.columns]
     if existing_feeder_cols:
@@ -133,15 +133,14 @@ if uploaded_file is not None:
                     selected_bodies = st.multiselect("辦學團體 (只顯示多於一間的團體)", options=body_options)
                     if selected_bodies: filtered_df = filtered_df[filtered_df['辦學團體'].isin(selected_bodies)]
 
-                feeder_choice = st.radio("有關聯中學？", ['不限', '是', '否'], horizontal=True)
+                feeder_choice = st.radio("有關聯中學？", ['不限', '是', '否'], horizontal=True, key='feeder')
                 if feeder_choice != '不限': filtered_df = filtered_df[filtered_df['has_feeder_school'] == feeder_choice]
 
-                bus_choice = st.radio("有校車服務？", ['不限', '是', '否'], horizontal=True)
+                bus_choice = st.radio("有校車服務？", ['不限', '是', '否'], horizontal=True, key='bus')
                 if bus_choice != '不限' and 'has_school_bus' in filtered_df.columns:
                     filtered_df = filtered_df[filtered_df['has_school_bus'] == bus_choice]
-        
+
         with st.expander("📍 按地區及校網搜尋", expanded=False):
-            # (此處省略程式碼)
             col1, col2 = st.columns(2)
             with col1:
                 all_districts = sorted(processed_df['地區'].dropna().unique()); selected_districts = st.multiselect("**選擇地區 (可多選)**", options=all_districts)
@@ -153,7 +152,6 @@ if uploaded_file is not None:
                 if selected_nets: filtered_df = filtered_df[filtered_df['校網'].isin(selected_nets)]
         
         with st.expander("🌟 按辦學特色搜尋", expanded=False):
-            # (此處省略程式碼)
             feature_mapping = {"【教學模式與重點】": {"自主學習及探究": ['自主學習', '探究'],"STEAM": ['STEAM', '創客'], "電子學習": ['電子學習', 'e-learning'], "閱讀": ['閱讀'], "資優教育": ['資優'], "專題研習": ['專題研習'], "跨課程學習": ['跨課程'], "兩文三語": ['兩文三語'], "英文教育": ['英文'], "家校合作": ['家校合作'], "境外交流": ['境外交流'], "藝術": ['藝術'], "體育": ['體育']},"【價值觀與品德】": {"中華文化教育": ['中華文化'], "正向、價值觀、生命教育": ['正向', '價值觀', '生命教育'], "國民教育、國安教育": ['國民', '國安'], "服務教育": ['服務'], "關愛及精神健康": ['關愛', '健康']},"【學生支援與發展】": {"全人發展": ['全人發展', '多元發展'], "生涯規劃、啟發潛能": ['生涯規劃', '潛能'], "拔尖補底、照顧差異": ['拔尖補底', '個別差異'], "融合教育": ['融合教育']}}
             col1, col2, col3 = st.columns(3); all_selected_options = []
             with col1: selected1 = st.multiselect("教學模式與重點", options=list(feature_mapping["【教學模式與重點】"].keys())); all_selected_options.extend(selected1)
@@ -169,7 +167,6 @@ if uploaded_file is not None:
                         filtered_df = filtered_df[filtered_df['features_text'].str.contains(regex_pattern, case=False, na=False, regex=True)]
         
         with st.expander("🎓 按師資條件搜尋", expanded=False):
-            # (此處省略程式碼)
             st.write("透過滑桿設定您對師資的**最低**要求：")
             slider_options = {'已接受師資培訓(佔全校教師人數%)': '師資培訓比例 (%)', '學士(佔全校教師人數%)': '學士學歷比例 (%)', '碩士、博士或以上 (佔全校教師人數%)': '碩士或以上學歷比例 (%)', '特殊教育培訓 (佔全校教師人數%)': '特殊教育培訓比例 (%)', '0-4年資 (佔全校教師人數%)': '0-4年資比例 (%)', '5-9年資(佔全校教師人數%)': '5-9年資比例 (%)', '10年或以上年資 (佔全校教師人數%)': '10年以上年資比例 (%)'}
             for col_name, slider_label in slider_options.items():
@@ -178,7 +175,6 @@ if uploaded_file is not None:
                     if min_val > 0: filtered_df = filtered_df[filtered_df[col_name] >= min_val]
         
         with st.expander("📚 按課業安排搜尋", expanded=False):
-            # (此處省略程式碼)
             st.write("選擇您偏好的課業與評估方式：")
             st.markdown("**評估次數**"); col1, col2 = st.columns(2)
             with col1:
@@ -193,9 +189,9 @@ if uploaded_file is not None:
                 if max_p2_6_exams != '任何次數': filtered_df = filtered_df[filtered_df['二至六年級全年全科考試次數'] <= int(max_p2_6_exams)]
             st.markdown("**其他安排**"); p1_no_exam = st.radio("小一上學期以多元化評估代替測考？", ['不限', '是', '否'], horizontal=True)
             if p1_no_exam != '不限' and 'p1_no_exam_assessment' in filtered_df.columns: filtered_df = filtered_df[filtered_df['p1_no_exam_assessment'] == p1_no_exam]
-            avoid_holiday = st.radio("避免長假後測考？", ['不限', '是', '否'], horizontal=True)
+            avoid_holiday = st.radio("避免長假後測考？", ['不限', '是', '否'], horizontal=True, key='holiday')
             if avoid_holiday != '不限' and 'avoid_holiday_exams' in filtered_df.columns: filtered_df = filtered_df[filtered_df['avoid_holiday_exams'] == avoid_holiday]
-            afternoon_tut = st.radio("設下午導修時段？", ['不限', '是', '否'], horizontal=True)
+            afternoon_tut = st.radio("設下午導修時段？", ['不限', '是', '否'], horizontal=True, key='tutorial')
             if afternoon_tut != '不限' and 'afternoon_tutorial' in filtered_df.columns: filtered_df = filtered_df[filtered_df['afternoon_tutorial'] == afternoon_tut]
         
         # --- 步驟 3: 顯示最終結果 ---
@@ -213,7 +209,7 @@ if uploaded_file is not None:
                     st.write(f"**學校類別:** {school.get('學校類別', '未提供')}")
                     st.write(f"**辦學團體:** {school.get('辦學團體', '未提供')}")
                     st.write(f"**創校年份:** {school.get('創校年份', '未提供')}")
-                    st.write(f"**校長:** {school.get('校長', '未提供')}") # 校長
+                    st.write(f"**校長:** {school.get('校長', '未提供')}")
                     st.write(f"**家教會:** {school.get('has_pta', '未提供')}")
                 with info_col2:
                     st.write(f"**學生性別:** {school.get('學生性別', '未提供')}")
@@ -221,18 +217,15 @@ if uploaded_file is not None:
                     st.write(f"**學校佔地面積:** {school.get('學校佔地面積', '未提供')}")
                     st.write(f"**校監:** {school.get('校監／學校管理委員會主席', '未提供')}")
                     st.write(f"**校車服務:** {school.get('has_school_bus', '未提供')}")
-
-                # 處理學費，欄位名稱可能有多種
+                
                 fee = school.get('學費 / 堂費 全年', school.get('學費_堂費_', '免費'))
                 st.write(f"**學費/堂費:** {fee}")
-
                 feeder_schools = {"一條龍中學": school.get('一條龍中學'), "直屬中學": school.get('直屬中學'), "聯繫中學": school.get('聯繫中學')}
                 for title, value in feeder_schools.items():
                     if pd.notna(value) and str(value).strip() not in ['-', '', '沒有']:
                         st.write(f"**{title}:** {value}")
                 st.markdown("---")
 
-                # (設施、師資、課業、辦學特色顯示程式碼與之前版本相同)
                 st.markdown("#### 🏫 學校設施詳情")
                 facility_counts = (f"🏫 課室: {school.get('課室數目', 'N/A')} | 🏛️ 禮堂: {school.get('禮堂數目', 'N/A')} | 🤸 操場: {school.get('操場數目', 'N/A')} | 📚 圖書館: {school.get('圖書館數目', 'N/A')}")
                 st.markdown(facility_counts)
@@ -246,15 +239,27 @@ if uploaded_file is not None:
                 with col2:
                     if diff >= 0: st.metric("全校教師總人數", f"{total_teachers} 人", f"+{diff}", delta_color="normal")
                     else: st.metric("全校教師總人數", f"{total_teachers} 人", f"{diff}", delta_color="inverse")
-                st.markdown("#### 📊 師資比例分佈圖"); pie_col1, pie_col2 = st.columns(2)
+                
+                # **【核心修正】為每個圖表加入獨一無二的 key**
+                st.markdown("#### 📊 師資比例分佈圖")
+                pie_col1, pie_col2 = st.columns(2)
                 with pie_col1:
                     st.markdown("**學歷分佈**"); edu_data = {'類別': ['學士', '碩士或以上'],'比例': [school.get('學士(佔全校教師人數%)', 0), school.get('碩士、博士或以上 (佔全校教師人數%)', 0)]}; edu_df = pd.DataFrame(edu_data)
-                    if edu_df['比例'].sum() > 0: fig1 = px.pie(edu_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Greens_r); fig1.update_layout(showlegend=False, margin=dict(l=0, r=0, t=0, b=0), height=200); fig1.update_traces(textposition='inside', textinfo='percent+label'); st.plotly_chart(fig1, use_container_width=True)
+                    if edu_df['比例'].sum() > 0:
+                        fig1 = px.pie(edu_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Greens_r);
+                        fig1.update_layout(showlegend=False, margin=dict(l=0, r=0, t=0, b=0), height=200);
+                        fig1.update_traces(textposition='inside', textinfo='percent+label');
+                        st.plotly_chart(fig1, use_container_width=True, key=f"edu_pie_{index}")
                     else: st.text("無相關數據")
                 with pie_col2:
                     st.markdown("**年資分佈**"); exp_data = {'類別': ['0-4年', '5-9年', '10年以上'],'比例': [school.get('0-4年資 (佔全校教師人數%)', 0), school.get('5-9年資(佔全校教師人數%)', 0), school.get('10年或以上年資 (佔全校教師人數%)', 0)]}; exp_df = pd.DataFrame(exp_data)
-                    if exp_df['比例'].sum() > 0: fig2 = px.pie(exp_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Blues_r); fig2.update_layout(showlegend=False, margin=dict(l=0, r=0, t=0, b=0), height=200); fig2.update_traces(textposition='inside', textinfo='percent+label'); st.plotly_chart(fig2, use_container_width=True)
+                    if exp_df['比例'].sum() > 0:
+                        fig2 = px.pie(exp_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Blues_r);
+                        fig2.update_layout(showlegend=False, margin=dict(l=0, r=0, t=0, b=0), height=200);
+                        fig2.update_traces(textposition='inside', textinfo='percent+label');
+                        st.plotly_chart(fig2, use_container_width=True, key=f"exp_pie_{index}")
                     else: st.text("無相關數據")
+
                 st.markdown("---"); st.markdown("#### 📚 課業與評估安排")
                 homework_details = {"小一測驗/考試次數": f"{school.get('一年級全年全科測驗次數', 'N/A')} / {school.get('一年級全年全科考試次數', 'N/A')}", "高年級測驗/考試次數": f"{school.get('二至六年級全年全科測驗次數', 'N/A')} / {school.get('二至六年級全年全科考試次數', 'N/A')}", "小一免試評估": school.get('p1_no_exam_assessment', 'N/A'), "多元學習評估": school.get('多元學習評估', '未提供'), "避免長假後測考": school.get('avoid_holiday_exams', 'N/A'), "下午導修時段": school.get('afternoon_tutorial', 'N/A')}
                 for title, value in homework_details.items():
