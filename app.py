@@ -34,7 +34,6 @@ def format_and_highlight_text(text, keywords):
 # --- 核心功能函式 (處理資料) ---
 @st.cache_data
 def process_dataframe(df):
-    # (此函式與之前版本相同)
     text_columns_for_features = [
         '學校關注事項', '學習和教學策略', '小學教育課程更新重點的發展', '共通能力的培養', '正確價值觀、態度和行為的培養',
         '全校參與照顧學生的多樣性', '全校參與模式融合教育', '非華語學生的教育支援', '課程剪裁及調適措施',
@@ -52,15 +51,11 @@ def process_dataframe(df):
             if not s.empty and s.max() > 0 and s.max() <= 1: s = s * 100
             df[col] = s.round(1)
     
-    # --- 修改開始 (處理數字欄位) ---
-    # 將數字欄位分為兩類處理
-    # 教師人數：留空的視為「沒有資料」(NaN)
     teacher_count_cols = ['核准編制教師職位數目', '全校教師總人數']
     for col in teacher_count_cols:
         if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce') # 移除 .fillna(0).astype(int)
+            df[col] = pd.to_numeric(df[col], errors='coerce')
 
-    # 測考次數：留空的視為 0 次
     exam_count_cols = [
         '一年級全年全科測驗次數', '一年級全年全科考試次數',
         '二至六年級全年全科測驗次數', '二至六年級全年全科考試次數'
@@ -68,7 +63,6 @@ def process_dataframe(df):
     for col in exam_count_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
-    # --- 修改結束 ---
             
     yes_no_cols = {
         '小一上學期以多元化的進展性評估代替測驗及考試': 'p1_no_exam_assessment',
@@ -222,29 +216,24 @@ if uploaded_file is not None:
                         detail_value = school.get(column_name, '');
                         if pd.notna(detail_value) and str(detail_value).strip() not in ['', '-']: st.write(f"**{display_title}:** {detail_value}")
                     
-                    # --- 修改開始 (師資團隊概覽) ---
                     st.markdown("---")
                     st.markdown("#### 🧑‍🏫 師資團隊概覽")
                     
-                    # 從 school series 中取得資料，現在它可能是數字或 NaN
                     approved_teachers = school.get('核准編制教師職位數目')
                     total_teachers = school.get('全校教師總人數')
                     
                     col1, col2 = st.columns(2)
                     
-                    # 顯示欄位 1: 核准編制教師職位
                     with col1:
                         if pd.isna(approved_teachers):
                             st.metric("核准編制教師職位", "沒有資料")
                         else:
                             st.metric("核准編制教師職位", f"{int(approved_teachers)} 人")
                     
-                    # 顯示欄位 2: 全校教師總人數
                     with col2:
                         if pd.isna(total_teachers):
                             st.metric("全校教師總人數", "沒有資料")
                         else:
-                            # 只有在「核准編制」和「全校總數」都有數字時，才計算和顯示差異
                             if not pd.isna(approved_teachers):
                                 diff = total_teachers - approved_teachers
                                 if diff >= 0:
@@ -252,9 +241,7 @@ if uploaded_file is not None:
                                 else:
                                     st.metric("全校教師總人數", f"{int(total_teachers)} 人", f"{int(diff)}", delta_color="inverse")
                             else:
-                                # 如果沒有「核准編制」人數，則不顯示差異
                                 st.metric("全校教師總人數", f"{int(total_teachers)} 人")
-                    # --- 修改結束 ---
 
                     if st.button("📊 顯示師資比例圖表", key=f"chart_btn_{index}"):
                         st.markdown("#### 📊 師資比例分佈圖"); pie_col1, pie_col2 = st.columns(2)
@@ -276,12 +263,25 @@ if uploaded_file is not None:
                     homework_details = {"小一測驗/考試次數": f"{school.get('一年級全年全科測驗次數', 'N/A')} / {school.get('一年級全年全科考試次數', 'N/A')}", "高年級測驗/考試次數": f"{school.get('二至六年級全年全科測驗次數', 'N/A')} / {school.get('二至六年級全年全科考試次數', 'N/A')}", "小一免試評估": school.get('p1_no_exam_assessment', 'N/A'), "多元學習評估": school.get('多元學習評估', '未提供'), "避免長假後測考": school.get('avoid_holiday_exams', 'N/A'), "下午導修時段": school.get('afternoon_tutorial', 'N/A')}
                     for title, value in homework_details.items():
                         if pd.notna(value) and str(value).strip() != '': st.write(f"**{title}:** {value}")
-                    st.markdown("---"); st.markdown("#### ✨ 辦學特色與發展計劃")
-                    feature_text_map = {"學校關注事項": "學校關注事項", "學習和教學策略": "學習和教學策略", "小學教育課程更新重點的發展": "課程更新重點", "共通能力的培養": "共通能力培養", "正確價值觀、態度和行為的培養": "價值觀培養", "全校參與照顧學生的多樣性": "照顧學生多樣性", "全校參與模式融合教育": "融合教育模式", "非華語學生的教育支援": "非華語學生支援", "課程剪裁及調適措施": "課程剪裁調適", "家校合作": "家校合作", "校風": "校風", "學校發展計劃": "學校發展計劃", "教師專業培訓及發展": "教師專業發展", "其他未來發展": "其他未來發展"}
+                    
+                    # --- 修改開始 (辦學特色與發展計劃) ---
+                    st.markdown("---")
+                    st.markdown("#### ✨ 辦學特色與發展計劃")
+                    feature_text_map = {
+                        "學校關注事項": "學校關注事項", "學習和教學策略": "學習和教學策略", "小學教育課程更新重點的發展": "課程更新重點", 
+                        "共通能力的培養": "共通能力培養", "正確價值觀、態度和行為的培養": "價值觀培養", "全校參與照顧學生的多樣性": "照顧學生多樣性",
+                        "全校參與模式融合教育": "融合教育模式", "非華語學生的教育支援": "非華語學生支援", "課程剪裁及調適措施": "課程剪裁調適",
+                        "家校合作": "家校合作", "校風": "校風", "學校發展計劃": "學校發展計劃", "教師專業培訓及發展": "教師專業發展", 
+                        "其他未來發展": "其他未來發展"
+                    }
                     for column_name, display_title in feature_text_map.items():
-                        detail_value = school.get(column_name, '');
+                        detail_value = school.get(column_name, '')
                         if pd.notna(detail_value) and str(detail_value).strip() not in ['', '-']:
-                            st.write(f"**{display_title}:**"); formatted_content = format_and_highlight_text(detail_value, all_selected_keywords_for_highlight); st.markdown(formatted_content, unsafe_allow_html=True)
+                            with st.expander(f"**{display_title}**"):
+                                formatted_content = format_and_highlight_text(detail_value, all_selected_keywords_for_highlight)
+                                st.markdown(formatted_content, unsafe_allow_html=True)
+                    # --- 修改結束 ---
+
     except Exception as e:
         st.error(f"檔案處理失敗：{e}")
 
