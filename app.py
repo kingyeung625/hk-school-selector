@@ -277,7 +277,16 @@ if uploaded_file is not None:
                     for column_name, display_title in feature_text_map.items():
                         detail_value = school.get(column_name, '')
                         if pd.notna(detail_value) and str(detail_value).strip() not in ['', '-']:
-                            with st.expander(f"**{display_title}**"):
+                            
+                            # 檢查此部分的內容是否包含任何高亮關鍵字
+                            should_expand = False
+                            if all_selected_keywords_for_highlight:
+                                text_to_check = str(detail_value).lower()
+                                if any(keyword.lower() in text_to_check for keyword in all_selected_keywords_for_highlight):
+                                    should_expand = True
+                            
+                            # 根據檢查結果設定 expander 的預設狀態
+                            with st.expander(f"**{display_title}**", expanded=should_expand):
                                 formatted_content = format_and_highlight_text(detail_value, all_selected_keywords_for_highlight)
                                 st.markdown(formatted_content, unsafe_allow_html=True)
                     # --- 修改結束 ---
