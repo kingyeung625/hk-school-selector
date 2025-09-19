@@ -130,19 +130,7 @@ def process_dataframe(df, articles_df=None):
     df.loc[cond_bus_only, 'bus_service_text'] = '有校車'
     df.loc[cond_nanny_only, 'bus_service_text'] = '有保姆車'
 
-    df['fees_text'] = '沒有'
-    df['has_fees'] = '否'
-    if '學費' in df.columns:
-        mask_fee = df['學費'].notna() & (df['學費'].astype(str).str.strip() != '') & (df['學費'].astype(str).str.strip() != '沒有')
-        df.loc[mask_fee, 'fees_text'] = "學費: " + df['學費'].astype(str)
-        df.loc[mask_fee, 'has_fees'] = '是'
-    if '堂費' in df.columns:
-        mask_sub = df['堂費'].notna() & (df['堂費'].astype(str).str.strip() != '') & (df['堂費'].astype(str).str.strip() != '沒有')
-        mask_both = (df['has_fees'] == '是') & mask_sub
-        df.loc[mask_both, 'fees_text'] += ' | ' + "堂費: " + df['堂費'].astype(str)
-        mask_sub_only = (df['has_fees'] == '否') & mask_sub
-        df.loc[mask_sub_only, 'fees_text'] = "堂費: " + df['堂費'].astype(str)
-        df.loc[mask_sub, 'has_fees'] = '是'
+    # --- 移除：學費/堂費的處理邏輯 ---
 
     feeder_cols = ['一條龍中學', '直屬中學', '聯繫中學']
     existing_feeder_cols = [col for col in feeder_cols if col in df.columns]
@@ -204,11 +192,12 @@ if uploaded_file is not None:
                         body_options = sorted(body_counts[body_counts >= 2].index)
                         selected_bodies = st.multiselect("辦學團體 (只顯示多於一間的團體)", options=body_options)
                         if selected_bodies: active_filters.append(('body', selected_bodies))
-                    fee_choice = st.radio("學費或堂費", ['不限', '有', '沒有'], horizontal=True, key='fees')
-                    if fee_choice == '有': active_filters.append(('fees', '是'))
-                    elif fee_choice == '沒有': active_filters.append(('fees', '否'))
+                    
+                    # --- 移除：學費或堂費篩選器 ---
+
                     feeder_choice = st.radio("有關聯中學？", ['不限', '是', '否'], horizontal=True, key='feeder')
                     if feeder_choice != '不限': active_filters.append(('feeder', feeder_choice))
+                    
                     bus_choice = st.radio("有校車或保姆車服務？", ['不限', '是', '否'], horizontal=True, key='bus')
                     if bus_choice != '不限': active_filters.append(('bus', bus_choice))
             with st.expander("📍 按地區及校網搜尋", expanded=False):
@@ -270,7 +259,9 @@ if uploaded_file is not None:
                     elif filter_type == 'religion': filtered_df = filtered_df[filtered_df['宗教'].isin(value)]
                     elif filter_type == 'language': filtered_df = filtered_df[filtered_df['教學語言'] == value]
                     elif filter_type == 'body': filtered_df = filtered_df[filtered_df['辦學團體'].isin(value)]
-                    elif filter_type == 'fees': filtered_df = filtered_df[filtered_df['has_fees'] == value]
+                    
+                    # --- 移除：學費篩選邏輯 ---
+
                     elif filter_type == 'feeder': filtered_df = filtered_df[filtered_df['has_feeder_school'] == value]
                     elif filter_type == 'bus': filtered_df = filtered_df[filtered_df['has_school_bus'] == value]
                     elif filter_type == 'district': filtered_df = filtered_df[filtered_df['地區'].isin(value)]
@@ -295,7 +286,6 @@ if uploaded_file is not None:
                 
                 st.info(f"綜合所有條件，共找到 {len(filtered_df)} 所學校。")
                 
-                # --- 修正開始：將分頁控制相關的所有程式碼都放入 if not filtered_df.empty 區塊內 ---
                 if not filtered_df.empty:
                     ITEMS_PER_PAGE = 10
                     total_items = len(filtered_df)
@@ -331,7 +321,7 @@ if uploaded_file is not None:
                             with info_col2:
                                 st.write(f"**學生性別:** {school.get('學生性別', '未提供')}"); st.write(f"**宗教:** {school.get('宗教', '未提供')}"); st.write(f"**學校佔地面積:** {school.get('學校佔地面積', '未提供')}"); st.write(f"**校監:** {school.get('校監／學校管理委員會主席', '未提供')}"); st.write(f"**家教會:** {school.get('has_pta', '未提供')}")
                             
-                            st.write(f"**學費/堂費:** {school.get('fees_text', '沒有')}")
+                            # --- 移除：學費/堂費的顯示 ---
                             st.write(f"**校車服務:** {school.get('bus_service_text', '沒有')}")
                             
                             feeder_schools = {"一條龍中學": school.get('一條龍中學'), "直屬中學": school.get('直屬中學'), "聯繫中學": school.get('聯繫中學')}
@@ -414,23 +404,21 @@ if uploaded_file is not None:
                                         formatted_content = format_and_highlight_text(detail_value, all_selected_keywords_for_highlight)
                                         st.markdown(formatted_content, unsafe_allow_html=True)
 
-                    # --- 分頁控制器 ---
                     st.markdown("---")
                     col1, col2, col3 = st.columns([2, 3, 2])
-                    with col1:
-                        if st.session_state.page > 0:
-                            if st.button("⬅️ 上一頁"):
-                                st.session_state.page -= 1
-                                st.rerun()
-                    with col2:
-                        if total_pages > 1:
+                    if total_pages > 1:
+                        with col1:
+                            if st.session_state.page > 0:
+                                if st.button("⬅️ 上一頁"):
+                                    st.session_state.page -= 1
+                                    st.rerun()
+                        with col2:
                             st.write(f"頁數: {st.session_state.page + 1} / {total_pages}")
-                    with col3:
-                        if st.session_state.page < total_pages - 1:
-                            if st.button("下一頁 ➡️"):
-                                st.session_state.page += 1
-                                st.rerun()
-                # --- 修正結束 ---
+                        with col3:
+                            if st.session_state.page < total_pages - 1:
+                                if st.button("下一頁 ➡️"):
+                                    st.session_state.page += 1
+                                    st.rerun()
 
     except Exception as e:
         st.error(f"檔案處理失敗：{e}")
