@@ -9,6 +9,13 @@ st.set_page_config(page_title="「01教育」小學概覽搜尋器", layout="cen
 st.title('「01教育」小學概覽搜尋器')
 st.write("請先上傳您最新的學校資料檔案，然後使用下方的篩選器來尋找心儀的學校。")
 
+# --- 初始化 Session State ---
+# 用於儲存分頁狀態和快取篩選條件
+if 'page' not in st.session_state:
+    st.session_state.page = 0
+if 'active_filters_cache' not in st.session_state:
+    st.session_state.active_filters_cache = None
+
 # --- 文字處理函式 ---
 def format_and_highlight_text(text, keywords):
     text_str = str(text).strip()
@@ -34,7 +41,6 @@ def format_and_highlight_text(text, keywords):
 # --- 核心功能函式 (處理資料) ---
 @st.cache_data
 def process_dataframe(df):
-    # --- 新增修改：全局替換 "-" 為 "沒有" ---
     df.replace('-', '沒有', inplace=True)
 
     text_columns_for_features = [
@@ -78,16 +84,29 @@ def process_dataframe(df):
         if col in df.columns:
             df[new_name] = df[col].apply(lambda x: '是' if str(x).strip().lower() in ['有', 'yes'] else '否')
     
-    # --- 新增修改：處理學費和堂費欄位 ---
-    if '學費' in df.columns:
-        df['has_school_fee'] = df['學費'].apply(lambda x: '是' if pd.notna(x) and str(x).strip() not in ['', '沒有'] else '否')
-    else:
-        df['has_school_fee'] = '否'
+    def process_fees(row):
+        school_fee = row.get('學費', '沒有')
+        subscription_fee = row.get('堂費', '沒有')
+        
+        has_school_fee_data = pd.notna(school_fee) and str(school_fee).strip() not in ['', '沒有']
+        has_subscription_fee_data = pd.notna(subscription_fee) and str(subscription_fee).strip() not in ['', '沒有']
+        
+        row['has_fees'] = '是' if has_school_fee_data or has_subscription_fee_data else '否'
+        
+        fees_parts = []
+        if has_school_fee_data:
+            fees_parts.append(f"學費: {school_fee}")
+        if has_subscription_fee_data:
+            fees_parts.append(f"堂費: {subscription_fee}")
+        
+        if fees_parts:
+            row['fees_text'] = ' | '.join(fees_parts)
+        else:
+            row['fees_text'] = '沒有'
+            
+        return row
 
-    if '堂費' in df.columns:
-        df['has_subscription_fee'] = df['堂費'].apply(lambda x: '是' if pd.notna(x) and str(x).strip() not in ['', '沒有'] else '否')
-    else:
-        df['has_subscription_fee'] = '否'
+    df = df.apply(process_fees, axis=1)
 
     feeder_cols = ['一條龍中學', '直屬中學', '聯繫中學']
     existing_feeder_cols = [col for col in feeder_cols if col in df.columns]
@@ -133,14 +152,9 @@ if uploaded_file is not None:
                     selected_bodies = st.multiselect("辦學團體 (只顯示多於一間的團體)", options=body_options)
                     if selected_bodies: active_filters.append(('body', selected_bodies))
                 
-                # --- 新增修改：加入學費和堂費的篩選器 ---
-                school_fee_choice = st.radio("學費", ['不限', '有', '沒有'], horizontal=True, key='school_fee')
-                if school_fee_choice == '有': active_filters.append(('school_fee', '是'))
-                elif school_fee_choice == '沒有': active_filters.append(('school_fee', '否'))
-                
-                subscription_fee_choice = st.radio("堂費", ['不限', '有', '沒有'], horizontal=True, key='subscription_fee')
-                if subscription_fee_choice == '有': active_filters.append(('subscription_fee', '是'))
-                elif subscription_fee_choice == '沒有': active_filters.append(('subscription_fee', '否'))
+                fee_choice = st.radio("學費/堂費", ['不限', '有', '沒有'], horizontal=True, key='fees')
+                if fee_choice == '有': active_filters.append(('fees', '是'))
+                elif fee_choice == '沒有': active_filters.append(('fees', '否'))
 
                 feeder_choice = st.radio("有關聯中學？", ['不限', '是', '否'], horizontal=True, key='feeder')
                 if feeder_choice != '不限': active_filters.append(('feeder', feeder_choice))
@@ -188,6 +202,13 @@ if uploaded_file is not None:
             if avoid_holiday != '不限': active_filters.append(('avoid_holiday', avoid_holiday))
             afternoon_tut = st.radio("設下午導修時段？", ['不限', '是', '否'], horizontal=True, key='tutorial')
             if afternoon_tut != '不限': active_filters.append(('afternoon_tut', afternoon_tut))
+        
+        # --- 修改開始：檢查篩選條件是否變化，若有則重置頁數 ---
+        if active_filters != st.session_state.get('active_filters_cache', None):
+            st.session_state.page = 0  # 重置到第一頁
+            st.session_state.active_filters_cache = active_filters
+        # --- 修改結束 ---
+
         st.markdown("---"); st.header(f"搜尋結果")
         if not active_filters:
             st.info("☝️ 請使用上方的篩選器開始尋找學校。")
@@ -202,11 +223,7 @@ if uploaded_file is not None:
                 elif filter_type == 'body': filtered_df = filtered_df[filtered_df['辦學團體'].isin(value)]
                 elif filter_type == 'feeder': filtered_df = filtered_df[filtered_df['has_feeder_school'] == value]
                 elif filter_type == 'bus': filtered_df = filtered_df[filtered_df['has_school_bus'] == value]
-                
-                # --- 新增修改：加入學費和堂費的篩選邏輯 ---
-                elif filter_type == 'school_fee': filtered_df = filtered_df[filtered_df['has_school_fee'] == value]
-                elif filter_type == 'subscription_fee': filtered_df = filtered_df[filtered_df['has_subscription_fee'] == value]
-
+                elif filter_type == 'fees': filtered_df = filtered_df[filtered_df['has_fees'] == value]
                 elif filter_type == 'district': filtered_df = filtered_df[filtered_df['地區'].isin(value)]
                 elif filter_type == 'net': filtered_df = filtered_df[filtered_df['校網'].isin(value)]
                 elif filter_type == 'features':
@@ -226,101 +243,138 @@ if uploaded_file is not None:
                 elif filter_type == 'p1_no_exam': filtered_df = filtered_df[filtered_df['p1_no_exam_assessment'] == value]
                 elif filter_type == 'avoid_holiday': filtered_df = filtered_df[filtered_df['avoid_holiday_exams'] == value]
                 elif filter_type == 'afternoon_tut': filtered_df = filtered_df[filtered_df['afternoon_tutorial'] == value]
+            
             st.info(f"綜合所有條件，共找到 {len(filtered_df)} 所學校。")
-            for index, school in filtered_df.iterrows():
-                with st.expander(f"**{school.get('學校名稱', 'N/A')}** ({school.get('地區', 'N/A')})"):
-                    st.markdown("#### 📖 學校基本資料")
-                    info_col1, info_col2 = st.columns(2)
-                    with info_col1:
-                        st.write(f"**學校類別:** {school.get('學校類別', '未提供')}"); st.write(f"**辦學團體:** {school.get('辦學團體', '未提供')}"); st.write(f"**創校年份:** {school.get('創校年份', '未提供')}"); st.write(f"**校長:** {school.get('校長_', '未提供')}"); st.write(f"**家教會:** {school.get('has_pta', '未提供')}")
-                    with info_col2:
-                        st.write(f"**學生性別:** {school.get('學生性別', '未提供')}"); st.write(f"**宗教:** {school.get('宗教', '未提供')}"); st.write(f"**學校佔地面積:** {school.get('學校佔地面積', '未提供')}"); st.write(f"**校監:** {school.get('校監／學校管理委員會主席', '未提供')}"); st.write(f"**校車服務:** {school.get('has_school_bus', '未提供')}")
-                    
-                    # 顯示學費和堂費（因為已全局替換，這裡無需修改）
-                    st.write(f"**學費:** {school.get('學費', '沒有')}"); st.write(f"**堂費:** {school.get('堂費', '沒有')}")
+            
+            # --- 修改開始：分頁邏輯 ---
+            if not filtered_df.empty:
+                ITEMS_PER_PAGE = 10
+                total_items = len(filtered_df)
+                total_pages = (total_items + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE
 
-                    feeder_schools = {"一條龍中學": school.get('一條龍中學'), "直屬中學": school.get('直屬中學'), "聯繫中學": school.get('聯繫中學')}
-                    for title, value in feeder_schools.items():
-                        if pd.notna(value) and str(value).strip() not in ['', '沒有']: st.write(f"**{title}:** {value}")
-                    st.markdown("---")
-                    st.markdown("#### 🏫 學校設施詳情")
-                    facility_counts = (f"🏫 課室: {school.get('課室數目', 'N/A')} | 🏛️ 禮堂: {school.get('禮堂數目', 'N/A')} | 🤸 操場: {school.get('操場數目', 'N/A')} | 📚 圖書館: {school.get('圖書館數目', 'N/A')}")
-                    st.markdown(facility_counts)
-                    other_facilities = {"特別室": "特別室", "支援有特殊教育需要學生的設施": "SEN 支援設施", "其他學校設施": "其他學校設施"}
-                    for column_name, display_title in other_facilities.items():
-                        detail_value = school.get(column_name, '');
-                        if pd.notna(detail_value) and str(detail_value).strip() not in ['', '沒有']: st.write(f"**{display_title}:** {detail_value}")
-                    
-                    st.markdown("---")
-                    st.markdown("#### 🧑‍🏫 師資團隊概覽")
-                    
-                    approved_teachers = school.get('核准編制教師職位數目')
-                    total_teachers = school.get('全校教師總人數')
-                    
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        if pd.isna(approved_teachers):
-                            st.metric("核准編制教師職位", "沒有資料")
-                        else:
-                            st.metric("核准編制教師職位", f"{int(approved_teachers)} 人")
-                    
-                    with col2:
-                        if pd.isna(total_teachers):
-                            st.metric("全校教師總人數", "沒有資料")
-                        else:
-                            if not pd.isna(approved_teachers):
-                                diff = total_teachers - approved_teachers
-                                if diff >= 0:
-                                    st.metric("全校教師總人數", f"{int(total_teachers)} 人", f"+{int(diff)}", delta_color="normal")
-                                else:
-                                    st.metric("全校教師總人數", f"{int(total_teachers)} 人", f"{int(diff)}", delta_color="inverse")
+                # 確保頁數在有效範圍內
+                st.session_state.page = max(0, min(st.session_state.page, total_pages - 1))
+                
+                start_idx = st.session_state.page * ITEMS_PER_PAGE
+                end_idx = min(start_idx + ITEMS_PER_PAGE, total_items)
+                
+                page_df = filtered_df.iloc[start_idx:end_idx]
+                
+                # 遍歷當前頁的資料進行顯示
+                for index, school in page_df.iterrows():
+                    with st.expander(f"**{school.get('學校名稱', 'N/A')}** ({school.get('地區', 'N/A')})"):
+                        st.markdown("#### 📖 學校基本資料")
+                        info_col1, info_col2 = st.columns(2)
+                        with info_col1:
+                            st.write(f"**學校類別:** {school.get('學校類別', '未提供')}"); st.write(f"**辦學團體:** {school.get('辦學團體', '未提供')}"); st.write(f"**創校年份:** {school.get('創校年份', '未提供')}"); st.write(f"**校長:** {school.get('校長_', '未提供')}"); st.write(f"**家教會:** {school.get('has_pta', '未提供')}")
+                        with info_col2:
+                            st.write(f"**學生性別:** {school.get('學生性別', '未提供')}"); st.write(f"**宗教:** {school.get('宗教', '未提供')}"); st.write(f"**學校佔地面積:** {school.get('學校佔地面積', '未提供')}"); st.write(f"**校監:** {school.get('校監／學校管理委員會主席', '未提供')}"); st.write(f"**校車服務:** {school.get('has_school_bus', '未提供')}")
+                        
+                        st.write(f"**學費/堂費:** {school.get('fees_text', '沒有')}")
+
+                        feeder_schools = {"一條龍中學": school.get('一條龍中學'), "直屬中學": school.get('直屬中學'), "聯繫中學": school.get('聯繫中學')}
+                        for title, value in feeder_schools.items():
+                            if pd.notna(value) and str(value).strip() not in ['', '沒有']: st.write(f"**{title}:** {value}")
+                        st.markdown("---")
+                        st.markdown("#### 🏫 學校設施詳情")
+                        facility_counts = (f"🏫 課室: {school.get('課室數目', 'N/A')} | 🏛️ 禮堂: {school.get('禮堂數目', 'N/A')} | 🤸 操場: {school.get('操場數目', 'N/A')} | 📚 圖書館: {school.get('圖書館數目', 'N/A')}")
+                        st.markdown(facility_counts)
+                        other_facilities = {"特別室": "特別室", "支援有特殊教育需要學生的設施": "SEN 支援設施", "其他學校設施": "其他學校設施"}
+                        for column_name, display_title in other_facilities.items():
+                            detail_value = school.get(column_name, '');
+                            if pd.notna(detail_value) and str(detail_value).strip() not in ['', '沒有']: st.write(f"**{display_title}:** {detail_value}")
+                        
+                        st.markdown("---")
+                        st.markdown("#### 🧑‍🏫 師資團隊概覽")
+                        
+                        approved_teachers = school.get('核准編制教師職位數目')
+                        total_teachers = school.get('全校教師總人數')
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            if pd.isna(approved_teachers):
+                                st.metric("核准編制教師職位", "沒有資料")
                             else:
-                                st.metric("全校教師總人數", f"{int(total_teachers)} 人")
+                                st.metric("核准編制教師職位", f"{int(approved_teachers)} 人")
+                        
+                        with col2:
+                            if pd.isna(total_teachers):
+                                st.metric("全校教師總人數", "沒有資料")
+                            else:
+                                if not pd.isna(approved_teachers):
+                                    diff = total_teachers - approved_teachers
+                                    if diff >= 0:
+                                        st.metric("全校教師總人數", f"{int(total_teachers)} 人", f"+{int(diff)}", delta_color="normal")
+                                    else:
+                                        st.metric("全校教師總人數", f"{int(total_teachers)} 人", f"{int(diff)}", delta_color="inverse")
+                                else:
+                                    st.metric("全校教師總人數", f"{int(total_teachers)} 人")
 
-                    if st.button("📊 顯示師資比例圖表", key=f"chart_btn_{index}"):
-                        st.markdown("#### 📊 師資比例分佈圖"); pie_col1, pie_col2 = st.columns(2)
-                        with pie_col1:
-                            st.markdown("**學歷分佈**"); edu_data = {'類別': ['學士', '碩士或以上'],'比例': [school.get('學士(佔全校教師人數%)', 0), school.get('碩士、博士或以上 (佔全校教師人數%)', 0)]}; edu_df = pd.DataFrame(edu_data)
-                            if edu_df['比例'].sum() > 0:
-                                fig1 = px.pie(edu_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Greens_r);
-                                fig1.update_layout(showlegend=False, margin=dict(l=10, r=10, t=30, b=10), height=300, font=dict(size=14))
-                                fig1.update_traces(textposition='outside', textinfo='percent+label'); st.plotly_chart(fig1, use_container_width=True, key=f"edu_pie_{index}")
-                            else: st.text("無相關數據")
-                        with pie_col2:
-                            st.markdown("**年資分佈**"); exp_data = {'類別': ['0-4年', '5-9年', '10年以上'],'比例': [school.get('0-4年資 (佔全校教師人數%)', 0), school.get('5-9年資(佔全校教師人數%)', 0), school.get('10年或以上年資 (佔全校教師人數%)', 0)]}; exp_df = pd.DataFrame(exp_data)
-                            if exp_df['比例'].sum() > 0:
-                                fig2 = px.pie(exp_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Blues_r);
-                                fig2.update_layout(showlegend=False, margin=dict(l=10, r=10, t=30, b=10), height=300, font=dict(size=14))
-                                fig2.update_traces(textposition='outside', textinfo='percent+label'); st.plotly_chart(fig2, use_container_width=True, key=f"exp_pie_{index}")
-                            else: st.text("無相關數據")
-                    st.markdown("---"); st.markdown("#### 📚 課業與評估安排")
-                    homework_details = {"小一測驗/考試次數": f"{school.get('一年級全年全科測驗次數', 'N/A')} / {school.get('一年級全年全科考試次數', 'N/A')}", "高年級測驗/考試次數": f"{school.get('二至六年級全年全科測驗次數', 'N/A')} / {school.get('二至六年級全年全科考試次數', 'N/A')}", "小一免試評估": school.get('p1_no_exam_assessment', 'N/A'), "多元學習評估": school.get('多元學習評估', '未提供'), "避免長假後測考": school.get('avoid_holiday_exams', 'N/A'), "下午導修時段": school.get('afternoon_tutorial', 'N/A')}
-                    for title, value in homework_details.items():
-                        if pd.notna(value) and str(value).strip() != '': st.write(f"**{title}:** {value}")
-                    
-                    st.markdown("---")
-                    st.markdown("#### ✨ 辦學特色與發展計劃")
-                    feature_text_map = {
-                        "學校關注事項": "學校關注事項", "學習和教學策略": "學習和教學策略", "小學教育課程更新重點的發展": "課程更新重點", 
-                        "共通能力的培養": "共通能力培養", "正確價值觀、態度和行為的培養": "價值觀培養", "全校參與照顧學生的多樣性": "照顧學生多樣性",
-                        "全校參與模式融合教育": "融合教育模式", "非華語學生的教育支援": "非華語學生支援", "課程剪裁及調適措施": "課程剪裁調適",
-                        "家校合作": "家校合作", "校風": "校風", "學校發展計劃": "學校發展計劃", "教師專業培訓及發展": "教師專業發展", 
-                        "其他未來發展": "其他未來發展"
-                    }
-                    for column_name, display_title in feature_text_map.items():
-                        detail_value = school.get(column_name, '')
-                        if pd.notna(detail_value) and str(detail_value).strip() not in ['', '沒有']:
-                            
-                            should_expand = False
-                            if all_selected_keywords_for_highlight:
-                                text_to_check = str(detail_value).lower()
-                                if any(keyword.lower() in text_to_check for keyword in all_selected_keywords_for_highlight):
-                                    should_expand = True
-                            
-                            with st.expander(f"**{display_title}**", expanded=should_expand):
-                                formatted_content = format_and_highlight_text(detail_value, all_selected_keywords_for_highlight)
-                                st.markdown(formatted_content, unsafe_allow_html=True)
+                        if st.button("📊 顯示師資比例圖表", key=f"chart_btn_{index}"):
+                            st.markdown("#### 📊 師資比例分佈圖"); pie_col1, pie_col2 = st.columns(2)
+                            with pie_col1:
+                                st.markdown("**學歷分佈**"); edu_data = {'類別': ['學士', '碩士或以上'],'比例': [school.get('學士(佔全校教師人數%)', 0), school.get('碩士、博士或以上 (佔全校教師人數%)', 0)]}; edu_df = pd.DataFrame(edu_data)
+                                if edu_df['比例'].sum() > 0:
+                                    fig1 = px.pie(edu_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Greens_r);
+                                    fig1.update_layout(showlegend=False, margin=dict(l=10, r=10, t=30, b=10), height=300, font=dict(size=14))
+                                    fig1.update_traces(textposition='outside', textinfo='percent+label'); st.plotly_chart(fig1, use_container_width=True, key=f"edu_pie_{index}")
+                                else: st.text("無相關數據")
+                            with pie_col2:
+                                st.markdown("**年資分佈**"); exp_data = {'類別': ['0-4年', '5-9年', '10年以上'],'比例': [school.get('0-4年資 (佔全校教師人數%)', 0), school.get('5-9年資(佔全校教師人數%)', 0), school.get('10年或以上年資 (佔全校教師人數%)', 0)]}; exp_df = pd.DataFrame(exp_data)
+                                if exp_df['比例'].sum() > 0:
+                                    fig2 = px.pie(exp_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Blues_r);
+                                    fig2.update_layout(showlegend=False, margin=dict(l=10, r=10, t=30, b=10), height=300, font=dict(size=14))
+                                    fig2.update_traces(textposition='outside', textinfo='percent+label'); st.plotly_chart(fig2, use_container_width=True, key=f"exp_pie_{index}")
+                                else: st.text("無相關數據")
+                        st.markdown("---"); st.markdown("#### 📚 課業與評估安排")
+                        homework_details = {"小一測驗/考試次數": f"{school.get('一年級全年全科測驗次數', 'N/A')} / {school.get('一年級全年全科考試次數', 'N/A')}", "高年級測驗/考試次數": f"{school.get('二至六年級全年全科測驗次數', 'N/A')} / {school.get('二至六年級全年全科考試次數', 'N/A')}", "小一免試評估": school.get('p1_no_exam_assessment', 'N/A'), "多元學習評估": school.get('多元學習評估', '未提供'), "避免長假後測考": school.get('avoid_holiday_exams', 'N/A'), "下午導修時段": school.get('afternoon_tutorial', 'N/A')}
+                        for title, value in homework_details.items():
+                            if pd.notna(value) and str(value).strip() != '': st.write(f"**{title}:** {value}")
+                        
+                        st.markdown("---")
+                        st.markdown("#### ✨ 辦學特色與發展計劃")
+                        feature_text_map = {
+                            "學校關注事項": "學校關注事項", "學習和教學策略": "學習和教學策略", "小學教育課程更新重點的發展": "課程更新重點", 
+                            "共通能力的培養": "共通能力培養", "正確價值觀、態度和行為的培養": "價值觀培養", "全校參與照顧學生的多樣性": "照顧學生多樣性",
+                            "全校參與模式融合教育": "融合教育模式", "非華語學生的教育支援": "非華語學生支援", "課程剪裁及調適措施": "課程剪裁調適",
+                            "家校合作": "家校合作", "校風": "校風", "學校發展計劃": "學校發展計劃", "教師專業培訓及發展": "教師專業發展", 
+                            "其他未來發展": "其他未來發展"
+                        }
+                        for column_name, display_title in feature_text_map.items():
+                            detail_value = school.get(column_name, '')
+                            if pd.notna(detail_value) and str(detail_value).strip() not in ['', '沒有']:
+                                
+                                should_expand = False
+                                if all_selected_keywords_for_highlight:
+                                    text_to_check = str(detail_value).lower()
+                                    if any(keyword.lower() in text_to_check for keyword in all_selected_keywords_for_highlight):
+                                        should_expand = True
+                                
+                                with st.expander(f"**{display_title}**", expanded=should_expand):
+                                    formatted_content = format_and_highlight_text(detail_value, all_selected_keywords_for_highlight)
+                                    st.markdown(formatted_content, unsafe_allow_html=True)
+
+                # --- 分頁控制器 ---
+                st.markdown("---")
+                col1, col2, col3 = st.columns([2, 3, 2])
+
+                with col1:
+                    if st.session_state.page > 0:
+                        if st.button("⬅️ 上一頁"):
+                            st.session_state.page -= 1
+                            st.rerun()
+
+                with col2:
+                    if total_pages > 1:
+                        st.write(f"頁數: {st.session_state.page + 1} / {total_pages}")
+
+                with col3:
+                    if st.session_state.page < total_pages - 1:
+                        if st.button("下一頁 ➡️"):
+                            st.session_state.page += 1
+                            st.rerun()
+            # --- 修改結束 ---
 
     except Exception as e:
         st.error(f"檔案處理失敗：{e}")
