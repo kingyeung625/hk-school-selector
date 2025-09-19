@@ -130,23 +130,23 @@ def process_dataframe(df, articles_df=None):
     df.loc[cond_bus_only, 'bus_service_text'] = '有校車'
     df.loc[cond_nanny_only, 'bus_service_text'] = '有保姆車'
 
-    # --- 修改：重新加入學費/堂費的處理邏輯 ---
-    school_fee_series = df['學費'].fillna('沒有').astype(str) if '學費' in df.columns else pd.Series('沒有', index=df.index)
-    subscription_fee_series = df['堂費'].fillna('沒有').astype(str) if '堂費' in df.columns else pd.Series('沒有', index=df.index)
-    has_school_fee_data = school_fee_series.str.strip().isin(['', '沒有']) == False
-    has_subscription_fee_data = subscription_fee_series.str.strip().isin(['', '沒有']) == False
-
-    # 1. 建立用於篩選的 'has_fees' 欄位
-    df['has_fees'] = '否'
-    df.loc[has_school_fee_data | has_subscription_fee_data, 'has_fees'] = '是'
-
-    # 2. 建立用於顯示的 'fees_text' 欄位
+    # --- 修正開始：學費/堂費的處理邏輯 ---
     df['fees_text'] = '沒有'
-    fee_part = "學費: " + school_fee_series
-    sub_part = "堂費: " + subscription_fee_series
-    df.loc[has_school_fee_data & has_subscription_fee_data, 'fees_text'] = fee_part + ' | ' + sub_part
-    df.loc[has_school_fee_data & ~has_subscription_fee_data, 'fees_text'] = fee_part
-    df.loc[~has_school_fee_data & has_subscription_fee_data, 'fees_text'] = sub_part
+    df['has_fees'] = '否'
+
+    if '學費' in df.columns:
+        mask_fee = df['學費'].notna() & (df['學費'].astype(str).str.strip() != '') & (df['學費'].astype(str).str.strip() != '沒有')
+        df.loc[mask_fee, 'fees_text'] = "學費: " + df['學費'].astype(str)
+        df.loc[mask_fee, 'has_fees'] = '是'
+
+    if '堂費' in df.columns:
+        mask_sub = df['堂費'].notna() & (df['堂費'].astype(str).str.strip() != '') & (df['堂費'].astype(str).str.strip() != '沒有')
+        mask_both = (df['has_fees'] == '是') & mask_sub
+        df.loc[mask_both, 'fees_text'] += ' | ' + "堂費: " + df['堂費'].astype(str)
+        mask_sub_only = (df['has_fees'] == '否') & mask_sub
+        df.loc[mask_sub_only, 'fees_text'] = "堂費: " + df['堂費'].astype(str)
+        df.loc[mask_sub, 'has_fees'] = '是'
+    # --- 修正結束 ---
 
     feeder_cols = ['一條龍中學', '直屬中學', '聯繫中學']
     existing_feeder_cols = [col for col in feeder_cols if col in df.columns]
@@ -183,6 +183,7 @@ if uploaded_file is not None:
             processed_df = process_dataframe(main_dataframe, articles_dataframe)
             st.success(f'成功讀取 {len(processed_df)} 筆學校資料！')
             
+            # (此處篩選器代碼與上一版完全相同，此處省略以便聚焦修改處)
             active_filters = []
             with st.expander("📝 按學校名稱搜尋", expanded=True):
                 search_keyword = st.text_input("**輸入學校名稱關鍵字：**")
@@ -199,31 +200,23 @@ if uploaded_file is not None:
                     if '宗教' in processed_df.columns:
                         religion_options = sorted(processed_df['宗教'].dropna().unique()); selected_religions = st.multiselect("宗教", options=religion_options)
                         if selected_religions: active_filters.append(('religion', selected_religions))
-                    
-                    # --- 新增：教育語言篩選器 ---
                     if '教學語言' in processed_df.columns:
                         lang_options = ['不限'] + sorted(processed_df['教學語言'].dropna().unique())
                         selected_lang = st.selectbox("教育語言", options=lang_options)
                         if selected_lang != '不限': active_filters.append(('language', selected_lang))
-
                 with col2:
                     if '辦學團體' in processed_df.columns:
                         body_counts = processed_df['辦學團體'].value_counts()
                         body_options = sorted(body_counts[body_counts >= 2].index)
                         selected_bodies = st.multiselect("辦學團體 (只顯示多於一間的團體)", options=body_options)
                         if selected_bodies: active_filters.append(('body', selected_bodies))
-                    
-                    # --- 新增：學費或堂費篩選器 ---
                     fee_choice = st.radio("學費或堂費", ['不限', '有', '沒有'], horizontal=True, key='fees')
                     if fee_choice == '有': active_filters.append(('fees', '是'))
                     elif fee_choice == '沒有': active_filters.append(('fees', '否'))
-
                     feeder_choice = st.radio("有關聯中學？", ['不限', '是', '否'], horizontal=True, key='feeder')
                     if feeder_choice != '不限': active_filters.append(('feeder', feeder_choice))
-                    
                     bus_choice = st.radio("有校車或保姆車服務？", ['不限', '是', '否'], horizontal=True, key='bus')
                     if bus_choice != '不限': active_filters.append(('bus', bus_choice))
-
             with st.expander("📍 按地區及校網搜尋", expanded=False):
                 col1, col2 = st.columns(2)
                 with col1:
@@ -312,7 +305,6 @@ if uploaded_file is not None:
                     ITEMS_PER_PAGE = 10
                     total_items = len(filtered_df)
                     total_pages = (total_items + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE
-
                     st.session_state.page = max(0, min(st.session_state.page, total_pages - 1))
                     
                     start_idx = st.session_state.page * ITEMS_PER_PAGE
@@ -346,7 +338,7 @@ if uploaded_file is not None:
                             
                             st.write(f"**學費/堂費:** {school.get('fees_text', '沒有')}")
                             st.write(f"**校車服務:** {school.get('bus_service_text', '沒有')}")
-
+                            
                             feeder_schools = {"一條龍中學": school.get('一條龍中學'), "直屬中學": school.get('直屬中學'), "聯繫中學": school.get('聯繫中學')}
                             for title, value in feeder_schools.items():
                                 if pd.notna(value) and str(value).strip() not in ['', '沒有']: st.write(f"**{title}:** {value}")
@@ -362,18 +354,14 @@ if uploaded_file is not None:
                             
                             st.markdown("---")
                             st.markdown("#### 🧑‍🏫 師資團隊概覽")
-                            
                             approved_teachers = school.get('核准編制教師職位數目')
                             total_teachers = school.get('全校教師總人數')
-                            
                             col1, col2 = st.columns(2)
-                            
                             with col1:
                                 if pd.isna(approved_teachers):
                                     st.metric("核准編制教師職位", "沒有資料")
                                 else:
                                     st.metric("核准編制教師職位", f"{int(approved_teachers)} 人")
-                            
                             with col2:
                                 if pd.isna(total_teachers):
                                     st.metric("全校教師總人數", "沒有資料")
@@ -386,7 +374,6 @@ if uploaded_file is not None:
                                             st.metric("全校教師總人數", f"{int(total_teachers)} 人", f"{int(diff)}", delta_color="inverse")
                                     else:
                                         st.metric("全校教師總人數", f"{int(total_teachers)} 人")
-
                             if st.button("📊 顯示師資比例圖表", key=f"chart_btn_{index}"):
                                 st.markdown("#### 📊 師資比例分佈圖"); pie_col1, pie_col2 = st.columns(2)
                                 with pie_col1:
@@ -403,7 +390,6 @@ if uploaded_file is not None:
                                         fig2.update_layout(showlegend=False, margin=dict(l=10, r=10, t=30, b=10), height=300, font=dict(size=14))
                                         fig2.update_traces(textposition='outside', textinfo='percent+label'); st.plotly_chart(fig2, use_container_width=True, key=f"exp_pie_{index}")
                                     else: st.text("無相關數據")
-
                             st.markdown("---")
                             st.markdown("#### 📚 課業與評估安排")
                             homework_details = {"小一測驗/考試次數": f"{school.get('一年級全年全科測驗次數', 'N/A')} / {school.get('一年級全年全科考試次數', 'N/A')}", "高年級測驗/考試次數": f"{school.get('二至六年級全年全科測驗次數', 'N/A')} / {school.get('二至六年級全年全科考試次數', 'N/A')}", "小一免試評估": school.get('p1_no_exam_assessment', 'N/A'), "多元學習評估": school.get('多元學習評估', '未提供'), "避免長假後測考": school.get('avoid_holiday_exams', 'N/A'), "下午導修時段": school.get('afternoon_tutorial', 'N/A')}
