@@ -72,40 +72,44 @@ def process_dataframe(df):
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
             
+    # --- 修改：從 yes_no_cols 中移除 '校車服務'，它將被單獨處理 ---
     yes_no_cols = {
         '小一上學期以多元化的進展性評估代替測驗及考試': 'p1_no_exam_assessment',
         '避免緊接在長假期後安排測考，讓學生在假期有充分的休息': 'avoid_holiday_exams',
         '按校情靈活編排時間表，盡量在下午安排導修時段，讓學生能在教師指導下完成部分家課': 'afternoon_tutorial',
-        '校車服務': 'has_school_bus',
         '家教會': 'has_pta'
     }
     for col, new_name in yes_no_cols.items():
         if col in df.columns:
             df[new_name] = df[col].apply(lambda x: '是' if str(x).strip().lower() in ['有', 'yes'] else '否')
     
-    # --- 修改開始：使用更可靠的方式合併處理學費和堂費 ---
-    # 獲取學費和堂費欄位，如果不存在則以「沒有」填充
+    # --- 修改開始：新的校車/保姆車服務處理邏輯 ---
+    bus_series = df['校車服務'].fillna('沒有').astype(str) if '校車服務' in df.columns else pd.Series('沒有', index=df.index)
+    has_bus_data = bus_series.str.strip().isin(['', '沒有']) == False
+    df['has_school_bus'] = '否'
+    df.loc[has_bus_data, 'has_school_bus'] = '是'
+    
+    df['bus_service_text'] = '沒有'
+    cond_both = bus_series.str.contains("校車") & bus_series.str.contains("保姆車")
+    cond_bus_only = bus_series.str.contains("校車") & ~bus_series.str.contains("保姆車")
+    cond_nanny_only = ~bus_series.str.contains("校車") & bus_series.str.contains("保姆車")
+    df.loc[cond_both, 'bus_service_text'] = '有校車及保姆車'
+    df.loc[cond_bus_only, 'bus_service_text'] = '有校車'
+    df.loc[cond_nanny_only, 'bus_service_text'] = '有保姆車'
+    # --- 修改結束 ---
+
+    # --- 修改：簡化學費/堂費處理邏輯，只生成顯示欄位 ---
     school_fee_series = df['學費'].fillna('沒有').astype(str) if '學費' in df.columns else pd.Series('沒有', index=df.index)
     subscription_fee_series = df['堂費'].fillna('沒有').astype(str) if '堂費' in df.columns else pd.Series('沒有', index=df.index)
-
-    # 判斷是否存在有效費用資料的條件
     has_school_fee_data = school_fee_series.str.strip().isin(['', '沒有']) == False
     has_subscription_fee_data = subscription_fee_series.str.strip().isin(['', '沒有']) == False
-
-    # 1. 建立用於篩選的 'has_fees' 欄位
-    df['has_fees'] = '否'
-    df.loc[has_school_fee_data | has_subscription_fee_data, 'has_fees'] = '是'
-
-    # 2. 建立用於顯示的 'fees_text' 欄位
+    
     df['fees_text'] = '沒有'
     fee_part = "學費: " + school_fee_series
     sub_part = "堂費: " + subscription_fee_series
-    
-    # 根據條件組合顯示文字
     df.loc[has_school_fee_data & has_subscription_fee_data, 'fees_text'] = fee_part + ' | ' + sub_part
     df.loc[has_school_fee_data & ~has_subscription_fee_data, 'fees_text'] = fee_part
     df.loc[~has_school_fee_data & has_subscription_fee_data, 'fees_text'] = sub_part
-    # --- 修改結束 ---
 
     feeder_cols = ['一條龍中學', '直屬中學', '聯繫中學']
     existing_feeder_cols = [col for col in feeder_cols if col in df.columns]
@@ -151,13 +155,13 @@ if uploaded_file is not None:
                     selected_bodies = st.multiselect("辦學團體 (只顯示多於一間的團體)", options=body_options)
                     if selected_bodies: active_filters.append(('body', selected_bodies))
                 
-                fee_choice = st.radio("學費/堂費", ['不限', '有', '沒有'], horizontal=True, key='fees')
-                if fee_choice == '有': active_filters.append(('fees', '是'))
-                elif fee_choice == '沒有': active_filters.append(('fees', '否'))
+                # --- 修改：移除學費/堂費篩選器 ---
 
                 feeder_choice = st.radio("有關聯中學？", ['不限', '是', '否'], horizontal=True, key='feeder')
                 if feeder_choice != '不限': active_filters.append(('feeder', feeder_choice))
-                bus_choice = st.radio("有校車服務？", ['不限', '是', '否'], horizontal=True, key='bus')
+                
+                # --- 修改：更新校車服務篩選器標題 ---
+                bus_choice = st.radio("有校車或保姆車服務？", ['不限', '是', '否'], horizontal=True, key='bus')
                 if bus_choice != '不限': active_filters.append(('bus', bus_choice))
 
         with st.expander("📍 按地區及校網搜尋", expanded=False):
@@ -220,7 +224,7 @@ if uploaded_file is not None:
                 elif filter_type == 'body': filtered_df = filtered_df[filtered_df['辦學團體'].isin(value)]
                 elif filter_type == 'feeder': filtered_df = filtered_df[filtered_df['has_feeder_school'] == value]
                 elif filter_type == 'bus': filtered_df = filtered_df[filtered_df['has_school_bus'] == value]
-                elif filter_type == 'fees': filtered_df = filtered_df[filtered_df['has_fees'] == value]
+                # --- 修改：移除學費的篩選邏輯 ---
                 elif filter_type == 'district': filtered_df = filtered_df[filtered_df['地區'].isin(value)]
                 elif filter_type == 'net': filtered_df = filtered_df[filtered_df['校網'].isin(value)]
                 elif filter_type == 'features':
@@ -262,7 +266,9 @@ if uploaded_file is not None:
                         with info_col1:
                             st.write(f"**學校類別:** {school.get('學校類別', '未提供')}"); st.write(f"**辦學團體:** {school.get('辦學團體', '未提供')}"); st.write(f"**創校年份:** {school.get('創校年份', '未提供')}"); st.write(f"**校長:** {school.get('校長_', '未提供')}"); st.write(f"**家教會:** {school.get('has_pta', '未提供')}")
                         with info_col2:
-                            st.write(f"**學生性別:** {school.get('學生性別', '未提供')}"); st.write(f"**宗教:** {school.get('宗教', '未提供')}"); st.write(f"**學校佔地面積:** {school.get('學校佔地面積', '未提供')}"); st.write(f"**校監:** {school.get('校監／學校管理委員會主席', '未提供')}"); st.write(f"**校車服務:** {school.get('has_school_bus', '未提供')}")
+                            st.write(f"**學生性別:** {school.get('學生性別', '未提供')}"); st.write(f"**宗教:** {school.get('宗教', '未提供')}"); st.write(f"**學校佔地面積:** {school.get('學校佔地面積', '未提供')}"); st.write(f"**校監:** {school.get('校監／學校管理委員會主席', '未提供')}")
+                            # --- 修改：更新校車服務的顯示邏輯 ---
+                            st.write(f"**校車服務:** {school.get('bus_service_text', '沒有')}")
                         
                         st.write(f"**學費/堂費:** {school.get('fees_text', '沒有')}")
 
