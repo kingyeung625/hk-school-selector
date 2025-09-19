@@ -34,6 +34,9 @@ def format_and_highlight_text(text, keywords):
 # --- 核心功能函式 (處理資料) ---
 @st.cache_data
 def process_dataframe(df):
+    # --- 新增修改：全局替換 "-" 為 "沒有" ---
+    df.replace('-', '沒有', inplace=True)
+
     text_columns_for_features = [
         '學校關注事項', '學習和教學策略', '小學教育課程更新重點的發展', '共通能力的培養', '正確價值觀、態度和行為的培養',
         '全校參與照顧學生的多樣性', '全校參與模式融合教育', '非華語學生的教育支援', '課程剪裁及調適措施',
@@ -74,11 +77,23 @@ def process_dataframe(df):
     for col, new_name in yes_no_cols.items():
         if col in df.columns:
             df[new_name] = df[col].apply(lambda x: '是' if str(x).strip().lower() in ['有', 'yes'] else '否')
+    
+    # --- 新增修改：處理學費和堂費欄位 ---
+    if '學費' in df.columns:
+        df['has_school_fee'] = df['學費'].apply(lambda x: '是' if pd.notna(x) and str(x).strip() not in ['', '沒有'] else '否')
+    else:
+        df['has_school_fee'] = '否'
+
+    if '堂費' in df.columns:
+        df['has_subscription_fee'] = df['堂費'].apply(lambda x: '是' if pd.notna(x) and str(x).strip() not in ['', '沒有'] else '否')
+    else:
+        df['has_subscription_fee'] = '否'
+
     feeder_cols = ['一條龍中學', '直屬中學', '聯繫中學']
     existing_feeder_cols = [col for col in feeder_cols if col in df.columns]
     if existing_feeder_cols:
          df['has_feeder_school'] = df[existing_feeder_cols].apply(
-            lambda row: '是' if any(pd.notna(val) and str(val).strip() not in ['-', '', '沒有'] for val in row) else '否',
+            lambda row: '是' if any(pd.notna(val) and str(val).strip() not in ['', '沒有'] for val in row) else '否',
             axis=1
         )
     else:
@@ -117,10 +132,21 @@ if uploaded_file is not None:
                     body_options = sorted(body_counts[body_counts >= 2].index)
                     selected_bodies = st.multiselect("辦學團體 (只顯示多於一間的團體)", options=body_options)
                     if selected_bodies: active_filters.append(('body', selected_bodies))
+                
+                # --- 新增修改：加入學費和堂費的篩選器 ---
+                school_fee_choice = st.radio("學費", ['不限', '有', '沒有'], horizontal=True, key='school_fee')
+                if school_fee_choice == '有': active_filters.append(('school_fee', '是'))
+                elif school_fee_choice == '沒有': active_filters.append(('school_fee', '否'))
+                
+                subscription_fee_choice = st.radio("堂費", ['不限', '有', '沒有'], horizontal=True, key='subscription_fee')
+                if subscription_fee_choice == '有': active_filters.append(('subscription_fee', '是'))
+                elif subscription_fee_choice == '沒有': active_filters.append(('subscription_fee', '否'))
+
                 feeder_choice = st.radio("有關聯中學？", ['不限', '是', '否'], horizontal=True, key='feeder')
                 if feeder_choice != '不限': active_filters.append(('feeder', feeder_choice))
                 bus_choice = st.radio("有校車服務？", ['不限', '是', '否'], horizontal=True, key='bus')
                 if bus_choice != '不限': active_filters.append(('bus', bus_choice))
+
         with st.expander("📍 按地區及校網搜尋", expanded=False):
             col1, col2 = st.columns(2)
             with col1:
@@ -176,6 +202,11 @@ if uploaded_file is not None:
                 elif filter_type == 'body': filtered_df = filtered_df[filtered_df['辦學團體'].isin(value)]
                 elif filter_type == 'feeder': filtered_df = filtered_df[filtered_df['has_feeder_school'] == value]
                 elif filter_type == 'bus': filtered_df = filtered_df[filtered_df['has_school_bus'] == value]
+                
+                # --- 新增修改：加入學費和堂費的篩選邏輯 ---
+                elif filter_type == 'school_fee': filtered_df = filtered_df[filtered_df['has_school_fee'] == value]
+                elif filter_type == 'subscription_fee': filtered_df = filtered_df[filtered_df['has_subscription_fee'] == value]
+
                 elif filter_type == 'district': filtered_df = filtered_df[filtered_df['地區'].isin(value)]
                 elif filter_type == 'net': filtered_df = filtered_df[filtered_df['校網'].isin(value)]
                 elif filter_type == 'features':
@@ -204,9 +235,13 @@ if uploaded_file is not None:
                         st.write(f"**學校類別:** {school.get('學校類別', '未提供')}"); st.write(f"**辦學團體:** {school.get('辦學團體', '未提供')}"); st.write(f"**創校年份:** {school.get('創校年份', '未提供')}"); st.write(f"**校長:** {school.get('校長_', '未提供')}"); st.write(f"**家教會:** {school.get('has_pta', '未提供')}")
                     with info_col2:
                         st.write(f"**學生性別:** {school.get('學生性別', '未提供')}"); st.write(f"**宗教:** {school.get('宗教', '未提供')}"); st.write(f"**學校佔地面積:** {school.get('學校佔地面積', '未提供')}"); st.write(f"**校監:** {school.get('校監／學校管理委員會主席', '未提供')}"); st.write(f"**校車服務:** {school.get('has_school_bus', '未提供')}")
+                    
+                    # 顯示學費和堂費（因為已全局替換，這裡無需修改）
+                    st.write(f"**學費:** {school.get('學費', '沒有')}"); st.write(f"**堂費:** {school.get('堂費', '沒有')}")
+
                     feeder_schools = {"一條龍中學": school.get('一條龍中學'), "直屬中學": school.get('直屬中學'), "聯繫中學": school.get('聯繫中學')}
                     for title, value in feeder_schools.items():
-                        if pd.notna(value) and str(value).strip() not in ['-', '', '沒有']: st.write(f"**{title}:** {value}")
+                        if pd.notna(value) and str(value).strip() not in ['', '沒有']: st.write(f"**{title}:** {value}")
                     st.markdown("---")
                     st.markdown("#### 🏫 學校設施詳情")
                     facility_counts = (f"🏫 課室: {school.get('課室數目', 'N/A')} | 🏛️ 禮堂: {school.get('禮堂數目', 'N/A')} | 🤸 操場: {school.get('操場數目', 'N/A')} | 📚 圖書館: {school.get('圖書館數目', 'N/A')}")
@@ -214,7 +249,7 @@ if uploaded_file is not None:
                     other_facilities = {"特別室": "特別室", "支援有特殊教育需要學生的設施": "SEN 支援設施", "其他學校設施": "其他學校設施"}
                     for column_name, display_title in other_facilities.items():
                         detail_value = school.get(column_name, '');
-                        if pd.notna(detail_value) and str(detail_value).strip() not in ['', '-']: st.write(f"**{display_title}:** {detail_value}")
+                        if pd.notna(detail_value) and str(detail_value).strip() not in ['', '沒有']: st.write(f"**{display_title}:** {detail_value}")
                     
                     st.markdown("---")
                     st.markdown("#### 🧑‍🏫 師資團隊概覽")
@@ -275,7 +310,7 @@ if uploaded_file is not None:
                     }
                     for column_name, display_title in feature_text_map.items():
                         detail_value = school.get(column_name, '')
-                        if pd.notna(detail_value) and str(detail_value).strip() not in ['', '-']:
+                        if pd.notna(detail_value) and str(detail_value).strip() not in ['', '沒有']:
                             
                             should_expand = False
                             if all_selected_keywords_for_highlight:
