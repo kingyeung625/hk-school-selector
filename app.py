@@ -10,7 +10,6 @@ st.title('「01教育」小學概覽搜尋器')
 st.write("請先上傳您最新的學校資料檔案，然後使用下方的篩選器來尋找心儀的學校。")
 
 # --- 初始化 Session State ---
-# 用於儲存分頁狀態和快取篩選條件
 if 'page' not in st.session_state:
     st.session_state.page = 0
 if 'active_filters_cache' not in st.session_state:
@@ -84,29 +83,29 @@ def process_dataframe(df):
         if col in df.columns:
             df[new_name] = df[col].apply(lambda x: '是' if str(x).strip().lower() in ['有', 'yes'] else '否')
     
-    def process_fees(row):
-        school_fee = row.get('學費', '沒有')
-        subscription_fee = row.get('堂費', '沒有')
-        
-        has_school_fee_data = pd.notna(school_fee) and str(school_fee).strip() not in ['', '沒有']
-        has_subscription_fee_data = pd.notna(subscription_fee) and str(subscription_fee).strip() not in ['', '沒有']
-        
-        row['has_fees'] = '是' if has_school_fee_data or has_subscription_fee_data else '否'
-        
-        fees_parts = []
-        if has_school_fee_data:
-            fees_parts.append(f"學費: {school_fee}")
-        if has_subscription_fee_data:
-            fees_parts.append(f"堂費: {subscription_fee}")
-        
-        if fees_parts:
-            row['fees_text'] = ' | '.join(fees_parts)
-        else:
-            row['fees_text'] = '沒有'
-            
-        return row
+    # --- 修改開始：使用更可靠的方式合併處理學費和堂費 ---
+    # 獲取學費和堂費欄位，如果不存在則以「沒有」填充
+    school_fee_series = df['學費'].fillna('沒有').astype(str) if '學費' in df.columns else pd.Series('沒有', index=df.index)
+    subscription_fee_series = df['堂費'].fillna('沒有').astype(str) if '堂費' in df.columns else pd.Series('沒有', index=df.index)
 
-    df = df.apply(process_fees, axis=1)
+    # 判斷是否存在有效費用資料的條件
+    has_school_fee_data = school_fee_series.str.strip().isin(['', '沒有']) == False
+    has_subscription_fee_data = subscription_fee_series.str.strip().isin(['', '沒有']) == False
+
+    # 1. 建立用於篩選的 'has_fees' 欄位
+    df['has_fees'] = '否'
+    df.loc[has_school_fee_data | has_subscription_fee_data, 'has_fees'] = '是'
+
+    # 2. 建立用於顯示的 'fees_text' 欄位
+    df['fees_text'] = '沒有'
+    fee_part = "學費: " + school_fee_series
+    sub_part = "堂費: " + subscription_fee_series
+    
+    # 根據條件組合顯示文字
+    df.loc[has_school_fee_data & has_subscription_fee_data, 'fees_text'] = fee_part + ' | ' + sub_part
+    df.loc[has_school_fee_data & ~has_subscription_fee_data, 'fees_text'] = fee_part
+    df.loc[~has_school_fee_data & has_subscription_fee_data, 'fees_text'] = sub_part
+    # --- 修改結束 ---
 
     feeder_cols = ['一條龍中學', '直屬中學', '聯繫中學']
     existing_feeder_cols = [col for col in feeder_cols if col in df.columns]
@@ -203,11 +202,9 @@ if uploaded_file is not None:
             afternoon_tut = st.radio("設下午導修時段？", ['不限', '是', '否'], horizontal=True, key='tutorial')
             if afternoon_tut != '不限': active_filters.append(('afternoon_tut', afternoon_tut))
         
-        # --- 修改開始：檢查篩選條件是否變化，若有則重置頁數 ---
         if active_filters != st.session_state.get('active_filters_cache', None):
-            st.session_state.page = 0  # 重置到第一頁
+            st.session_state.page = 0
             st.session_state.active_filters_cache = active_filters
-        # --- 修改結束 ---
 
         st.markdown("---"); st.header(f"搜尋結果")
         if not active_filters:
@@ -246,13 +243,11 @@ if uploaded_file is not None:
             
             st.info(f"綜合所有條件，共找到 {len(filtered_df)} 所學校。")
             
-            # --- 修改開始：分頁邏輯 ---
             if not filtered_df.empty:
                 ITEMS_PER_PAGE = 10
                 total_items = len(filtered_df)
                 total_pages = (total_items + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE
 
-                # 確保頁數在有效範圍內
                 st.session_state.page = max(0, min(st.session_state.page, total_pages - 1))
                 
                 start_idx = st.session_state.page * ITEMS_PER_PAGE
@@ -260,7 +255,6 @@ if uploaded_file is not None:
                 
                 page_df = filtered_df.iloc[start_idx:end_idx]
                 
-                # 遍歷當前頁的資料進行顯示
                 for index, school in page_df.iterrows():
                     with st.expander(f"**{school.get('學校名稱', 'N/A')}** ({school.get('地區', 'N/A')})"):
                         st.markdown("#### 📖 學校基本資料")
@@ -355,7 +349,6 @@ if uploaded_file is not None:
                                     formatted_content = format_and_highlight_text(detail_value, all_selected_keywords_for_highlight)
                                     st.markdown(formatted_content, unsafe_allow_html=True)
 
-                # --- 分頁控制器 ---
                 st.markdown("---")
                 col1, col2, col3 = st.columns([2, 3, 2])
 
@@ -374,7 +367,6 @@ if uploaded_file is not None:
                         if st.button("下一頁 ➡️"):
                             st.session_state.page += 1
                             st.rerun()
-            # --- 修改結束 ---
 
     except Exception as e:
         st.error(f"檔案處理失敗：{e}")
