@@ -130,15 +130,12 @@ def process_dataframe(df, articles_df=None):
     df.loc[cond_bus_only, 'bus_service_text'] = '有校車'
     df.loc[cond_nanny_only, 'bus_service_text'] = '有保姆車'
 
-    # --- 修正開始：學費/堂費的處理邏輯 ---
     df['fees_text'] = '沒有'
     df['has_fees'] = '否'
-
     if '學費' in df.columns:
         mask_fee = df['學費'].notna() & (df['學費'].astype(str).str.strip() != '') & (df['學費'].astype(str).str.strip() != '沒有')
         df.loc[mask_fee, 'fees_text'] = "學費: " + df['學費'].astype(str)
         df.loc[mask_fee, 'has_fees'] = '是'
-
     if '堂費' in df.columns:
         mask_sub = df['堂費'].notna() & (df['堂費'].astype(str).str.strip() != '') & (df['堂費'].astype(str).str.strip() != '沒有')
         mask_both = (df['has_fees'] == '是') & mask_sub
@@ -146,7 +143,6 @@ def process_dataframe(df, articles_df=None):
         mask_sub_only = (df['has_fees'] == '否') & mask_sub
         df.loc[mask_sub_only, 'fees_text'] = "堂費: " + df['堂費'].astype(str)
         df.loc[mask_sub, 'has_fees'] = '是'
-    # --- 修正結束 ---
 
     feeder_cols = ['一條龍中學', '直屬中學', '聯繫中學']
     existing_feeder_cols = [col for col in feeder_cols if col in df.columns]
@@ -166,7 +162,6 @@ if uploaded_file is not None:
     try:
         main_dataframe = None
         articles_dataframe = None
-
         if uploaded_file.name.endswith('.csv'):
             main_dataframe = pd.read_csv(uploaded_file, engine='python')
             st.info("您上傳的是 CSV 檔案，將只讀取學校資料。")
@@ -183,7 +178,6 @@ if uploaded_file is not None:
             processed_df = process_dataframe(main_dataframe, articles_dataframe)
             st.success(f'成功讀取 {len(processed_df)} 筆學校資料！')
             
-            # (此處篩選器代碼與上一版完全相同，此處省略以便聚焦修改處)
             active_filters = []
             with st.expander("📝 按學校名稱搜尋", expanded=True):
                 search_keyword = st.text_input("**輸入學校名稱關鍵字：**")
@@ -301,6 +295,7 @@ if uploaded_file is not None:
                 
                 st.info(f"綜合所有條件，共找到 {len(filtered_df)} 所學校。")
                 
+                # --- 修正開始：將分頁控制相關的所有程式碼都放入 if not filtered_df.empty 區塊內 ---
                 if not filtered_df.empty:
                     ITEMS_PER_PAGE = 10
                     total_items = len(filtered_df)
@@ -419,24 +414,23 @@ if uploaded_file is not None:
                                         formatted_content = format_and_highlight_text(detail_value, all_selected_keywords_for_highlight)
                                         st.markdown(formatted_content, unsafe_allow_html=True)
 
-                st.markdown("---")
-                col1, col2, col3 = st.columns([2, 3, 2])
-
-                with col1:
-                    if st.session_state.page > 0:
-                        if st.button("⬅️ 上一頁"):
-                            st.session_state.page -= 1
-                            st.rerun()
-
-                with col2:
-                    if total_pages > 1:
-                        st.write(f"頁數: {st.session_state.page + 1} / {total_pages}")
-
-                with col3:
-                    if st.session_state.page < total_pages - 1:
-                        if st.button("下一頁 ➡️"):
-                            st.session_state.page += 1
-                            st.rerun()
+                    # --- 分頁控制器 ---
+                    st.markdown("---")
+                    col1, col2, col3 = st.columns([2, 3, 2])
+                    with col1:
+                        if st.session_state.page > 0:
+                            if st.button("⬅️ 上一頁"):
+                                st.session_state.page -= 1
+                                st.rerun()
+                    with col2:
+                        if total_pages > 1:
+                            st.write(f"頁數: {st.session_state.page + 1} / {total_pages}")
+                    with col3:
+                        if st.session_state.page < total_pages - 1:
+                            if st.button("下一頁 ➡️"):
+                                st.session_state.page += 1
+                                st.rerun()
+                # --- 修正結束 ---
 
     except Exception as e:
         st.error(f"檔案處理失敗：{e}")
