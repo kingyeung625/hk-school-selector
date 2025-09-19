@@ -24,9 +24,9 @@ def format_and_highlight_text(text, keywords):
     if keywords:
         pattern = '|'.join([re.escape(keyword) for keyword in keywords])
         html_output = re.sub(
-            pattern, 
-            lambda match: f'<span style="background-color: yellow;">{match.group(0)}</span>', 
-            html_output, 
+            pattern,
+            lambda match: f'<span style="background-color: yellow;">{match.group(0)}</span>',
+            html_output,
             flags=re.IGNORECASE
         )
     return html_output
@@ -51,13 +51,25 @@ def process_dataframe(df):
             s = pd.to_numeric(df[col].astype(str).str.replace('%', '', regex=False), errors='coerce').fillna(0)
             if not s.empty and s.max() > 0 and s.max() <= 1: s = s * 100
             df[col] = s.round(1)
-    numeric_cols = [
-        '核准編制教師職位數目', '全校教師總人數', '一年級全年全科測驗次數', '一年級全年全科考試次數',
+    
+    # --- 修改開始 (處理數字欄位) ---
+    # 將數字欄位分為兩類處理
+    # 教師人數：留空的視為「沒有資料」(NaN)
+    teacher_count_cols = ['核准編制教師職位數目', '全校教師總人數']
+    for col in teacher_count_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce') # 移除 .fillna(0).astype(int)
+
+    # 測考次數：留空的視為 0 次
+    exam_count_cols = [
+        '一年級全年全科測驗次數', '一年級全年全科考試次數',
         '二至六年級全年全科測驗次數', '二至六年級全年全科考試次數'
     ]
-    for col in numeric_cols:
+    for col in exam_count_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+    # --- 修改結束 ---
+            
     yes_no_cols = {
         '小一上學期以多元化的進展性評估代替測驗及考試': 'p1_no_exam_assessment',
         '避免緊接在長假期後安排測考，讓學生在假期有充分的休息': 'avoid_holiday_exams',
@@ -161,7 +173,7 @@ if uploaded_file is not None:
             st.info("☝️ 請使用上方的篩選器開始尋找學校。")
         else:
             filtered_df = processed_df.copy()
-            all_selected_keywords_for_highlight = [] 
+            all_selected_keywords_for_highlight = []
             for filter_type, value in active_filters:
                 if filter_type == 'name': filtered_df = filtered_df[filtered_df['學校名稱'].str.contains(value, case=False, na=False)]
                 elif filter_type == 'category': filtered_df = filtered_df[filtered_df['學校類別'].isin(value)]
@@ -209,12 +221,41 @@ if uploaded_file is not None:
                     for column_name, display_title in other_facilities.items():
                         detail_value = school.get(column_name, '');
                         if pd.notna(detail_value) and str(detail_value).strip() not in ['', '-']: st.write(f"**{display_title}:** {detail_value}")
-                    st.markdown("---"); total_teachers = school.get('全校教師總人數', 0); approved_teachers = school.get('核准編制教師職位數目', 0); diff = total_teachers - approved_teachers
-                    st.markdown("#### 🧑‍🏫 師資團隊概覽"); col1, col2 = st.columns(2)
-                    with col1: st.metric("核准編制教師職位", f"{int(approved_teachers)} 人")
+                    
+                    # --- 修改開始 (師資團隊概覽) ---
+                    st.markdown("---")
+                    st.markdown("#### 🧑‍🏫 師資團隊概覽")
+                    
+                    # 從 school series 中取得資料，現在它可能是數字或 NaN
+                    approved_teachers = school.get('核准編制教師職位數目')
+                    total_teachers = school.get('全校教師總人數')
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    # 顯示欄位 1: 核准編制教師職位
+                    with col1:
+                        if pd.isna(approved_teachers):
+                            st.metric("核准編制教師職位", "沒有資料")
+                        else:
+                            st.metric("核准編制教師職位", f"{int(approved_teachers)} 人")
+                    
+                    # 顯示欄位 2: 全校教師總人數
                     with col2:
-                        if diff >= 0: st.metric("全校教師總人數", f"{int(total_teachers)} 人", f"+{int(diff)}", delta_color="normal")
-                        else: st.metric("全校教師總人數", f"{int(total_teachers)} 人", f"{int(diff)}", delta_color="inverse")
+                        if pd.isna(total_teachers):
+                            st.metric("全校教師總人數", "沒有資料")
+                        else:
+                            # 只有在「核准編制」和「全校總數」都有數字時，才計算和顯示差異
+                            if not pd.isna(approved_teachers):
+                                diff = total_teachers - approved_teachers
+                                if diff >= 0:
+                                    st.metric("全校教師總人數", f"{int(total_teachers)} 人", f"+{int(diff)}", delta_color="normal")
+                                else:
+                                    st.metric("全校教師總人數", f"{int(total_teachers)} 人", f"{int(diff)}", delta_color="inverse")
+                            else:
+                                # 如果沒有「核准編制」人數，則不顯示差異
+                                st.metric("全校教師總人數", f"{int(total_teachers)} 人")
+                    # --- 修改結束 ---
+
                     if st.button("📊 顯示師資比例圖表", key=f"chart_btn_{index}"):
                         st.markdown("#### 📊 師資比例分佈圖"); pie_col1, pie_col2 = st.columns(2)
                         with pie_col1:
