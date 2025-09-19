@@ -328,65 +328,66 @@ if uploaded_file is not None:
                             feeder_schools = {"一條龍中學": school.get('一條龍中學'), "直屬中學": school.get('直屬中學'), "聯繫中學": school.get('聯繫中學')}
                             for title, value in feeder_schools.items():
                                 if pd.notna(value) and str(value).strip() not in ['', '沒有']: st.write(f"**{title}:** {value}")
-
-                            # --- 修改開始：將三個區塊轉換為 st.expander ---
+                            
+                            # --- 修改開始：還原為非摺疊樣式 ---
                             st.markdown("---")
-                            with st.expander("🏫 學校設施詳情", expanded=False):
-                                facility_counts = (f"🏫 課室: {school.get('課室數目', 'N/A')} | 🏛️ 禮堂: {school.get('禮堂數目', 'N/A')} | 🤸 操場: {school.get('操場數目', 'N/A')} | 📚 圖書館: {school.get('圖書館數目', 'N/A')}")
-                                st.markdown(facility_counts)
-                                other_facilities = {"特別室": "特別室", "支援有特殊教育需要學生的設施": "SEN 支援設施", "其他學校設施": "其他學校設施"}
-                                for column_name, display_title in other_facilities.items():
-                                    detail_value = school.get(column_name, '');
-                                    if pd.notna(detail_value) and str(detail_value).strip() not in ['', '沒有']: st.write(f"**{display_title}:** {detail_value}")
+                            st.markdown("#### 🏫 學校設施詳情")
+                            facility_counts = (f"🏫 課室: {school.get('課室數目', 'N/A')} | 🏛️ 禮堂: {school.get('禮堂數目', 'N/A')} | 🤸 操場: {school.get('操場數目', 'N/A')} | 📚 圖書館: {school.get('圖書館數目', 'N/A')}")
+                            st.markdown(facility_counts)
+                            other_facilities = {"特別室": "特別室", "支援有特殊教育需要學生的設施": "SEN 支援設施", "其他學校設施": "其他學校設施"}
+                            for column_name, display_title in other_facilities.items():
+                                detail_value = school.get(column_name, '');
+                                if pd.notna(detail_value) and str(detail_value).strip() not in ['', '沒有']: st.write(f"**{display_title}:** {detail_value}")
                             
                             st.markdown("---")
-                            with st.expander("🧑‍🏫 師資團隊概覽", expanded=False):
-                                approved_teachers = school.get('核准編制教師職位數目')
-                                total_teachers = school.get('全校教師總人數')
-                                
-                                col1, col2 = st.columns(2)
-                                
-                                with col1:
-                                    if pd.isna(approved_teachers):
-                                        st.metric("核准編制教師職位", "沒有資料")
-                                    else:
-                                        st.metric("核准編制教師職位", f"{int(approved_teachers)} 人")
-                                
-                                with col2:
-                                    if pd.isna(total_teachers):
-                                        st.metric("全校教師總人數", "沒有資料")
-                                    else:
-                                        if not pd.isna(approved_teachers):
-                                            diff = total_teachers - approved_teachers
-                                            if diff >= 0:
-                                                st.metric("全校教師總人數", f"{int(total_teachers)} 人", f"+{int(diff)}", delta_color="normal")
-                                            else:
-                                                st.metric("全校教師總人數", f"{int(total_teachers)} 人", f"{int(diff)}", delta_color="inverse")
+                            st.markdown("#### 🧑‍🏫 師資團隊概覽")
+                            
+                            approved_teachers = school.get('核准編制教師職位數目')
+                            total_teachers = school.get('全校教師總人數')
+                            
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                if pd.isna(approved_teachers):
+                                    st.metric("核准編制教師職位", "沒有資料")
+                                else:
+                                    st.metric("核准編制教師職位", f"{int(approved_teachers)} 人")
+                            
+                            with col2:
+                                if pd.isna(total_teachers):
+                                    st.metric("全校教師總人數", "沒有資料")
+                                else:
+                                    if not pd.isna(approved_teachers):
+                                        diff = total_teachers - approved_teachers
+                                        if diff >= 0:
+                                            st.metric("全校教師總人數", f"{int(total_teachers)} 人", f"+{int(diff)}", delta_color="normal")
                                         else:
-                                            st.metric("全校教師總人數", f"{int(total_teachers)} 人")
+                                            st.metric("全校教師總人數", f"{int(total_teachers)} 人", f"{int(diff)}", delta_color="inverse")
+                                    else:
+                                        st.metric("全校教師總人數", f"{int(total_teachers)} 人")
 
-                                if st.button("📊 顯示師資比例圖表", key=f"chart_btn_{index}"):
-                                    st.markdown("#### 📊 師資比例分佈圖"); pie_col1, pie_col2 = st.columns(2)
-                                    with pie_col1:
-                                        st.markdown("**學歷分佈**"); edu_data = {'類別': ['學士', '碩士或以上'],'比例': [school.get('學士(佔全校教師人數%)', 0), school.get('碩士、博士或以上 (佔全校教師人數%)', 0)]}; edu_df = pd.DataFrame(edu_data)
-                                        if edu_df['比例'].sum() > 0:
-                                            fig1 = px.pie(edu_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Greens_r);
-                                            fig1.update_layout(showlegend=False, margin=dict(l=10, r=10, t=30, b=10), height=300, font=dict(size=14))
-                                            fig1.update_traces(textposition='outside', textinfo='percent+label'); st.plotly_chart(fig1, use_container_width=True, key=f"edu_pie_{index}")
-                                        else: st.text("無相關數據")
-                                    with pie_col2:
-                                        st.markdown("**年資分佈**"); exp_data = {'類別': ['0-4年', '5-9年', '10年以上'],'比例': [school.get('0-4年資 (佔全校教師人數%)', 0), school.get('5-9年資(佔全校教師人數%)', 0), school.get('10年或以上年資 (佔全校教師人數%)', 0)]}; exp_df = pd.DataFrame(exp_data)
-                                        if exp_df['比例'].sum() > 0:
-                                            fig2 = px.pie(exp_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Blues_r);
-                                            fig2.update_layout(showlegend=False, margin=dict(l=10, r=10, t=30, b=10), height=300, font=dict(size=14))
-                                            fig2.update_traces(textposition='outside', textinfo='percent+label'); st.plotly_chart(fig2, use_container_width=True, key=f"exp_pie_{index}")
-                                        else: st.text("無相關數據")
-                            
+                            if st.button("📊 顯示師資比例圖表", key=f"chart_btn_{index}"):
+                                st.markdown("#### 📊 師資比例分佈圖"); pie_col1, pie_col2 = st.columns(2)
+                                with pie_col1:
+                                    st.markdown("**學歷分佈**"); edu_data = {'類別': ['學士', '碩士或以上'],'比例': [school.get('學士(佔全校教師人數%)', 0), school.get('碩士、博士或以上 (佔全校教師人數%)', 0)]}; edu_df = pd.DataFrame(edu_data)
+                                    if edu_df['比例'].sum() > 0:
+                                        fig1 = px.pie(edu_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Greens_r);
+                                        fig1.update_layout(showlegend=False, margin=dict(l=10, r=10, t=30, b=10), height=300, font=dict(size=14))
+                                        fig1.update_traces(textposition='outside', textinfo='percent+label'); st.plotly_chart(fig1, use_container_width=True, key=f"edu_pie_{index}")
+                                    else: st.text("無相關數據")
+                                with pie_col2:
+                                    st.markdown("**年資分佈**"); exp_data = {'類別': ['0-4年', '5-9年', '10年以上'],'比例': [school.get('0-4年資 (佔全校教師人數%)', 0), school.get('5-9年資(佔全校教師人數%)', 0), school.get('10年或以上年資 (佔全校教師人數%)', 0)]}; exp_df = pd.DataFrame(exp_data)
+                                    if exp_df['比例'].sum() > 0:
+                                        fig2 = px.pie(exp_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Blues_r);
+                                        fig2.update_layout(showlegend=False, margin=dict(l=10, r=10, t=30, b=10), height=300, font=dict(size=14))
+                                        fig2.update_traces(textposition='outside', textinfo='percent+label'); st.plotly_chart(fig2, use_container_width=True, key=f"exp_pie_{index}")
+                                    else: st.text("無相關數據")
+
                             st.markdown("---")
-                            with st.expander("📚 課業與評估安排", expanded=False):
-                                homework_details = {"小一測驗/考試次數": f"{school.get('一年級全年全科測驗次數', 'N/A')} / {school.get('一年級全年全科考試次數', 'N/A')}", "高年級測驗/考試次數": f"{school.get('二至六年級全年全科測驗次數', 'N/A')} / {school.get('二至六年級全年全科考試次數', 'N/A')}", "小一免試評估": school.get('p1_no_exam_assessment', 'N/A'), "多元學習評估": school.get('多元學習評估', '未提供'), "避免長假後測考": school.get('avoid_holiday_exams', 'N/A'), "下午導修時段": school.get('afternoon_tutorial', 'N/A')}
-                                for title, value in homework_details.items():
-                                    if pd.notna(value) and str(value).strip() != '': st.write(f"**{title}:** {value}")
+                            st.markdown("#### 📚 課業與評估安排")
+                            homework_details = {"小一測驗/考試次數": f"{school.get('一年級全年全科測驗次數', 'N/A')} / {school.get('一年級全年全科考試次數', 'N/A')}", "高年級測驗/考試次數": f"{school.get('二至六年級全年全科測驗次數', 'N/A')} / {school.get('二至六年級全年全科考試次數', 'N/A')}", "小一免試評估": school.get('p1_no_exam_assessment', 'N/A'), "多元學習評估": school.get('多元學習評估', '未提供'), "避免長假後測考": school.get('avoid_holiday_exams', 'N/A'), "下午導修時段": school.get('afternoon_tutorial', 'N/A')}
+                            for title, value in homework_details.items():
+                                if pd.notna(value) and str(value).strip() != '': st.write(f"**{title}:** {value}")
                             # --- 修改結束 ---
                             
                             st.markdown("---")
