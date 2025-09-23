@@ -418,14 +418,14 @@ try:
                     if total_pages > 1:
                         with col1:
                             if st.session_state.page > 0:
-                                if st.button("⬅️ 上一頁"):
+                                if st.button("⬅️ 上一頁", key="prev_page"):
                                     st.session_state.page -= 1
                                     st.rerun()
                         with col2:
                             st.write(f"頁數: {st.session_state.page + 1} / {total_pages}")
                         with col3:
                             if st.session_state.page < total_pages - 1:
-                                if st.button("下一頁 ➡️"):
+                                if st.button("下一頁 ➡️", key="next_page"):
                                     st.session_state.page += 1
                                     st.rerun()
 except FileNotFoundError:
