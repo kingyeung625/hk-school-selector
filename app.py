@@ -155,11 +155,13 @@ def process_dataframe(df, articles_df=None):
 
 # --- 主要應用程式邏輯 ---
 try:
-    DATA_FILE = "school_data_with_articles.xlsx"
-    main_dataframe = pd.read_excel(DATA_FILE, sheet_name='學校資料', engine='openpyxl')
+    # --- 修改：從固定的 URL 讀取資料 ---
+    DATA_URL = "https://raw.githubusercontent.com/kingyeung625/hk-school-selector/3f177778e7a09e9d890e77d07017c2a7364cebb1/school_data_with_articles.xlsx"
+    
+    main_dataframe = pd.read_excel(DATA_URL, sheet_name='學校資料', engine='openpyxl')
     
     try:
-        articles_dataframe = pd.read_excel(DATA_FILE, sheet_name='相關文章', engine='openpyxl')
+        articles_dataframe = pd.read_excel(DATA_URL, sheet_name='相關文章', engine='openpyxl')
     except Exception:
         articles_dataframe = None
 
@@ -413,23 +415,20 @@ try:
                                 formatted_content = format_and_highlight_text(detail_value, all_selected_keywords_for_highlight)
                                 st.markdown(formatted_content, unsafe_allow_html=True)
 
-                    st.markdown("---")
-                    col1, col2, col3 = st.columns([2, 3, 2])
-                    if total_pages > 1:
-                        with col1:
-                            if st.session_state.page > 0:
-                                if st.button("⬅️ 上一頁", key="prev_page"):
-                                    st.session_state.page -= 1
-                                    st.rerun()
-                        with col2:
-                            st.write(f"頁數: {st.session_state.page + 1} / {total_pages}")
-                        with col3:
-                            if st.session_state.page < total_pages - 1:
-                                if st.button("下一頁 ➡️", key="next_page"):
-                                    st.session_state.page += 1
-                                    st.rerun()
-except FileNotFoundError:
-    st.error(f"錯誤：找不到資料檔案 '{DATA_FILE}'。")
-    st.info(f"請確保 '{DATA_FILE}' 檔案已放置在您的 GitHub 儲存庫中與 app.py 相同的資料夾內。")
+            st.markdown("---")
+            col1, col2, col3 = st.columns([2, 3, 2])
+            if total_pages > 1:
+                with col1:
+                    if st.session_state.page > 0:
+                        if st.button("⬅️ 上一頁", key="prev_page"):
+                            st.session_state.page -= 1
+                            st.rerun()
+                with col2:
+                    st.write(f"頁數: {st.session_state.page + 1} / {total_pages}")
+                with col3:
+                    if st.session_state.page < total_pages - 1:
+                        if st.button("下一頁 ➡️", key="next_page"):
+                            st.session_state.page += 1
+                            st.rerun()
 except Exception as e:
     st.error(f"處理資料時發生錯誤：{e}")
