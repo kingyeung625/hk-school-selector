@@ -291,7 +291,6 @@ if uploaded_file is not None:
                 
                 st.info(f"綜合所有條件，共找到 {len(filtered_df)} 所學校。")
                 
-                # --- 修正開始：將分頁控制的所有相關程式碼都放入 if not filtered_df.empty 區塊內 ---
                 if not filtered_df.empty:
                     ITEMS_PER_PAGE = 10
                     total_items = len(filtered_df)
@@ -380,9 +379,10 @@ if uploaded_file is not None:
                                     st.markdown("**學歷分佈**"); edu_data = {'類別': ['學士', '碩士或以上'],'比例': [school.get('學士(佔全校教師人數%)', 0), school.get('碩士、博士或以上 (佔全校教師人數%)', 0)]}; edu_df = pd.DataFrame(edu_data)
                                     if edu_df['比例'].sum() > 0:
                                         fig1 = px.pie(edu_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Greens_r)
+                                        # --- 修正：增加邊界並放大字體 ---
                                         fig1.update_layout(
-                                            showlegend=False, margin=dict(l=40, r=40, t=40, b=40), height=350, font=dict(size=14),
-                                            uniformtext_minsize=12, uniformtext_mode='hide'
+                                            showlegend=False, margin=dict(l=70, r=70, t=40, b=40), height=380, font=dict(size=16),
+                                            uniformtext_minsize=14, uniformtext_mode='hide'
                                         )
                                         fig1.update_traces(textposition='outside', textinfo='percent+label'); st.plotly_chart(fig1, use_container_width=True, key=f"edu_pie_{index}")
                                     else: st.text("無相關數據")
@@ -390,9 +390,10 @@ if uploaded_file is not None:
                                     st.markdown("**年資分佈**"); exp_data = {'類別': ['0-4年', '5-9年', '10年以上'],'比例': [school.get('0-4年資 (佔全校教師人數%)', 0), school.get('5-9年資(佔全校教師人數%)', 0), school.get('10年或以上年資 (佔全校教師人數%)', 0)]}; exp_df = pd.DataFrame(exp_data)
                                     if exp_df['比例'].sum() > 0:
                                         fig2 = px.pie(exp_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Blues_r)
+                                        # --- 修正：增加邊界並放大字體 ---
                                         fig2.update_layout(
-                                            showlegend=False, margin=dict(l=40, r=40, t=40, b=40), height=350, font=dict(size=14),
-                                            uniformtext_minsize=12, uniformtext_mode='hide'
+                                            showlegend=False, margin=dict(l=70, r=70, t=40, b=40), height=380, font=dict(size=16),
+                                            uniformtext_minsize=14, uniformtext_mode='hide'
                                         )
                                         fig2.update_traces(textposition='outside', textinfo='percent+label'); st.plotly_chart(fig2, use_container_width=True, key=f"exp_pie_{index}")
                                     else: st.text("無相關數據")
@@ -440,8 +441,6 @@ if uploaded_file is not None:
                                 if st.button("下一頁 ➡️"):
                                     st.session_state.page += 1
                                     st.rerun()
-                # --- 修正結束 ---
-
     except Exception as e:
         st.error(f"檔案處理失敗：{e}")
 
