@@ -291,6 +291,7 @@ if uploaded_file is not None:
                 
                 st.info(f"綜合所有條件，共找到 {len(filtered_df)} 所學校。")
                 
+                # --- 修正開始：將分頁控制的所有相關程式碼都放入 if not filtered_df.empty 區塊內 ---
                 if not filtered_df.empty:
                     ITEMS_PER_PAGE = 10
                     total_items = len(filtered_df)
@@ -333,7 +334,7 @@ if uploaded_file is not None:
                                 st.write(f"**校網:** {school.get('校網', '未提供')}")
                                 st.write(f"**校監:** {school.get('校監／學校管理委員會主席', '未提供')}")
                                 st.write(f"**家教會:** {school.get('has_pta', '未提供')}")
-                            
+
                             st.write(f"**學校佔地面積:** {school.get('學校佔地面積', '未提供')}")
                             st.write(f"**學費/堂費:** {school.get('fees_text', '沒有')}")
                             st.write(f"**校車服務:** {school.get('bus_service_text', '沒有')}")
@@ -439,6 +440,8 @@ if uploaded_file is not None:
                                 if st.button("下一頁 ➡️"):
                                     st.session_state.page += 1
                                     st.rerun()
+                # --- 修正結束 ---
+
     except Exception as e:
         st.error(f"檔案處理失敗：{e}")
 
