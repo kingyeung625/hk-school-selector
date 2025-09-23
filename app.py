@@ -327,16 +327,16 @@ if uploaded_file is not None:
                                 st.write(f"**創校年份:** {school.get('創校年份', '未提供')}")
                                 st.write(f"**校長:** {school.get('校長_', '未提供')}")
                                 st.write(f"**教學語言:** {school.get('教學語言', '未提供')}")
-                                st.write(f"**學費/堂費:** {school.get('fees_text', '沒有')}")
                             with info_col2:
                                 st.write(f"**學生性別:** {school.get('學生性別', '未提供')}")
                                 st.write(f"**宗教:** {school.get('宗教', '未提供')}")
                                 st.write(f"**校網:** {school.get('校網', '未提供')}")
                                 st.write(f"**校監:** {school.get('校監／學校管理委員會主席', '未提供')}")
                                 st.write(f"**家教會:** {school.get('has_pta', '未提供')}")
-                                st.write(f"**校車服務:** {school.get('bus_service_text', '沒有')}")
-
+                            
                             st.write(f"**學校佔地面積:** {school.get('學校佔地面積', '未提供')}")
+                            st.write(f"**學費/堂費:** {school.get('fees_text', '沒有')}")
+                            st.write(f"**校車服務:** {school.get('bus_service_text', '沒有')}")
                             
                             feeder_schools = {"一條龍中學": school.get('一條龍中學'), "直屬中學": school.get('直屬中學'), "聯繫中學": school.get('聯繫中學')}
                             for title, value in feeder_schools.items():
@@ -378,15 +378,21 @@ if uploaded_file is not None:
                                 with pie_col1:
                                     st.markdown("**學歷分佈**"); edu_data = {'類別': ['學士', '碩士或以上'],'比例': [school.get('學士(佔全校教師人數%)', 0), school.get('碩士、博士或以上 (佔全校教師人數%)', 0)]}; edu_df = pd.DataFrame(edu_data)
                                     if edu_df['比例'].sum() > 0:
-                                        fig1 = px.pie(edu_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Greens_r);
-                                        fig1.update_layout(showlegend=False, margin=dict(l=10, r=10, t=30, b=10), height=300, font=dict(size=14))
+                                        fig1 = px.pie(edu_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Greens_r)
+                                        fig1.update_layout(
+                                            showlegend=False, margin=dict(l=40, r=40, t=40, b=40), height=350, font=dict(size=14),
+                                            uniformtext_minsize=12, uniformtext_mode='hide'
+                                        )
                                         fig1.update_traces(textposition='outside', textinfo='percent+label'); st.plotly_chart(fig1, use_container_width=True, key=f"edu_pie_{index}")
                                     else: st.text("無相關數據")
                                 with pie_col2:
                                     st.markdown("**年資分佈**"); exp_data = {'類別': ['0-4年', '5-9年', '10年以上'],'比例': [school.get('0-4年資 (佔全校教師人數%)', 0), school.get('5-9年資(佔全校教師人數%)', 0), school.get('10年或以上年資 (佔全校教師人數%)', 0)]}; exp_df = pd.DataFrame(exp_data)
                                     if exp_df['比例'].sum() > 0:
-                                        fig2 = px.pie(exp_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Blues_r);
-                                        fig2.update_layout(showlegend=False, margin=dict(l=10, r=10, t=30, b=10), height=300, font=dict(size=14))
+                                        fig2 = px.pie(exp_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Blues_r)
+                                        fig2.update_layout(
+                                            showlegend=False, margin=dict(l=40, r=40, t=40, b=40), height=350, font=dict(size=14),
+                                            uniformtext_minsize=12, uniformtext_mode='hide'
+                                        )
                                         fig2.update_traces(textposition='outside', textinfo='percent+label'); st.plotly_chart(fig2, use_container_width=True, key=f"exp_pie_{index}")
                                     else: st.text("無相關數據")
                             st.markdown("---")
