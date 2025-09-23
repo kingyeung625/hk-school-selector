@@ -131,21 +131,16 @@ def process_dataframe(df, articles_df=None):
     df.loc[cond_bus_only, 'bus_service_text'] = '有校車'
     df.loc[cond_nanny_only, 'bus_service_text'] = '有保姆車'
 
-    # --- 修改開始：重新加入學費/堂費的處理邏輯 ---
     df['fees_text'] = '沒有'
     if '學費' in df.columns:
         mask_fee = df['學費'].notna() & (df['學費'].astype(str).str.strip() != '') & (df['學費'].astype(str).str.strip() != '沒有')
         df.loc[mask_fee, 'fees_text'] = "學費: " + df['學費'].astype(str)
-    
     if '堂費' in df.columns:
         mask_sub = df['堂費'].notna() & (df['堂費'].astype(str).str.strip() != '') & (df['堂費'].astype(str).str.strip() != '沒有')
-        # 檢查 fees_text 是否已經被 '學費' 填寫
         mask_both = (df['fees_text'] != '沒有') & mask_sub
         df.loc[mask_both, 'fees_text'] += ' | ' + "堂費: " + df['堂費'].astype(str)
-        # 只處理只有 '堂費' 的情況
         mask_sub_only = (df['fees_text'] == '沒有') & mask_sub
         df.loc[mask_sub_only, 'fees_text'] = "堂費: " + df['堂費'].astype(str)
-    # --- 修改結束 ---
 
     feeder_cols = ['一條龍中學', '直屬中學', '聯繫中學']
     existing_feeder_cols = [col for col in feeder_cols if col in df.columns]
@@ -324,19 +319,30 @@ if uploaded_file is not None:
                                         st.markdown(f"- [{title}]({url})")
                                 st.markdown("---")
 
+                            # --- 修改開始：重新排列學校基本資料 ---
                             st.markdown("#### 📖 學校基本資料")
                             info_col1, info_col2 = st.columns(2)
                             with info_col1:
-                                st.write(f"**學校類別:** {school.get('學校類別', '未提供')}"); st.write(f"**辦學團體:** {school.get('辦學團體', '未提供')}"); st.write(f"**創校年份:** {school.get('創校年份', '未提供')}"); st.write(f"**校長:** {school.get('校長_', '未提供')}"); st.write(f"**教學語言:** {school.get('教學語言', '未提供')}")
+                                st.write(f"**學校類別:** {school.get('學校類別', '未提供')}")
+                                st.write(f"**辦學團體:** {school.get('辦學團體', '未提供')}")
+                                st.write(f"**創校年份:** {school.get('創校年份', '未提供')}")
+                                st.write(f"**校長:** {school.get('校長_', '未提供')}")
+                                st.write(f"**教學語言:** {school.get('教學語言', '未提供')}")
+                                st.write(f"**學費/堂費:** {school.get('fees_text', '沒有')}")
                             with info_col2:
-                                st.write(f"**學生性別:** {school.get('學生性別', '未提供')}"); st.write(f"**宗教:** {school.get('宗教', '未提供')}"); st.write(f"**學校佔地面積:** {school.get('學校佔地面積', '未提供')}"); st.write(f"**校監:** {school.get('校監／學校管理委員會主席', '未提供')}"); st.write(f"**家教會:** {school.get('has_pta', '未提供')}")
-                            
-                            st.write(f"**學費/堂費:** {school.get('fees_text', '沒有')}")
-                            st.write(f"**校車服務:** {school.get('bus_service_text', '沒有')}")
+                                st.write(f"**學生性別:** {school.get('學生性別', '未提供')}")
+                                st.write(f"**宗教:** {school.get('宗教', '未提供')}")
+                                st.write(f"**校網:** {school.get('校網', '未提供')}")
+                                st.write(f"**校監:** {school.get('校監／學校管理委員會主席', '未提供')}")
+                                st.write(f"**家教會:** {school.get('has_pta', '未提供')}")
+                                st.write(f"**校車服務:** {school.get('bus_service_text', '沒有')}")
+
+                            st.write(f"**學校佔地面積:** {school.get('學校佔地面積', '未提供')}")
                             
                             feeder_schools = {"一條龍中學": school.get('一條龍中學'), "直屬中學": school.get('直屬中學'), "聯繫中學": school.get('聯繫中學')}
                             for title, value in feeder_schools.items():
                                 if pd.notna(value) and str(value).strip() not in ['', '沒有']: st.write(f"**{title}:** {value}")
+                            # --- 修改結束 ---
                             
                             st.markdown("---")
                             st.markdown("#### 🏫 學校設施詳情")
@@ -415,22 +421,4 @@ if uploaded_file is not None:
                                         st.markdown(formatted_content, unsafe_allow_html=True)
 
                     st.markdown("---")
-                    col1, col2, col3 = st.columns([2, 3, 2])
-                    if total_pages > 1:
-                        with col1:
-                            if st.session_state.page > 0:
-                                if st.button("⬅️ 上一頁"):
-                                    st.session_state.page -= 1
-                                    st.rerun()
-                        with col2:
-                            st.write(f"頁數: {st.session_state.page + 1} / {total_pages}")
-                        with col3:
-                            if st.session_state.page < total_pages - 1:
-                                if st.button("下一頁 ➡️"):
-                                    st.session_state.page += 1
-                                    st.rerun()
-    except Exception as e:
-        st.error(f"檔案處理失敗：{e}")
-
-else:
-    st.info("請先上傳您的資料檔案。建議使用包含「學校資料」和「相關文章」兩個工作表的 Excel 檔案。")
+                    col1, col2, col3 = st.columns(
