@@ -379,9 +379,8 @@ if uploaded_file is not None:
                                     st.markdown("**學歷分佈**"); edu_data = {'類別': ['學士', '碩士或以上'],'比例': [school.get('學士(佔全校教師人數%)', 0), school.get('碩士、博士或以上 (佔全校教師人數%)', 0)]}; edu_df = pd.DataFrame(edu_data)
                                     if edu_df['比例'].sum() > 0:
                                         fig1 = px.pie(edu_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Greens_r)
-                                        # --- 修正：增加邊界並放大字體 ---
                                         fig1.update_layout(
-                                            showlegend=False, margin=dict(l=70, r=70, t=40, b=40), height=380, font=dict(size=16),
+                                            showlegend=False, margin=dict(l=100, r=100, t=60, b=60), height=350, font=dict(size=16),
                                             uniformtext_minsize=14, uniformtext_mode='hide'
                                         )
                                         fig1.update_traces(textposition='outside', textinfo='percent+label'); st.plotly_chart(fig1, use_container_width=True, key=f"edu_pie_{index}")
@@ -390,9 +389,8 @@ if uploaded_file is not None:
                                     st.markdown("**年資分佈**"); exp_data = {'類別': ['0-4年', '5-9年', '10年以上'],'比例': [school.get('0-4年資 (佔全校教師人數%)', 0), school.get('5-9年資(佔全校教師人數%)', 0), school.get('10年或以上年資 (佔全校教師人數%)', 0)]}; exp_df = pd.DataFrame(exp_data)
                                     if exp_df['比例'].sum() > 0:
                                         fig2 = px.pie(exp_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Blues_r)
-                                        # --- 修正：增加邊界並放大字體 ---
                                         fig2.update_layout(
-                                            showlegend=False, margin=dict(l=70, r=70, t=40, b=40), height=380, font=dict(size=16),
+                                            showlegend=False, margin=dict(l=100, r=100, t=60, b=60), height=350, font=dict(size=16),
                                             uniformtext_minsize=14, uniformtext_mode='hide'
                                         )
                                         fig2.update_traces(textposition='outside', textinfo='percent+label'); st.plotly_chart(fig2, use_container_width=True, key=f"exp_pie_{index}")
