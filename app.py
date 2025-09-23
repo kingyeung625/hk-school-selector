@@ -67,6 +67,10 @@ def process_dataframe(df, articles_df=None):
 
     if articles_df is not None and not articles_df.empty:
         if '學校名稱' in articles_df.columns and '文章標題' in articles_df.columns and '文章連結' in articles_df.columns:
+            # --- 修正開始：先過濾掉標題或連結為空的無效文章資料 ---
+            articles_df.dropna(subset=['文章標題', '文章連結'], inplace=True)
+            # --- 修正結束 ---
+
             articles_grouped = articles_df.groupby('學校名稱').apply(
                 lambda x: list(zip(x['文章標題'], x['文章連結']))
             ).reset_index(name='articles')
@@ -78,6 +82,7 @@ def process_dataframe(df, articles_df=None):
     else:
         df['articles'] = [[] for _ in range(len(df))]
 
+    # (其餘資料處理邏輯不變)
     text_columns_for_features = [
         '學校關注事項', '學習和教學策略', '小學教育課程更新重點的發展', '共通能力的培養', '正確價值觀、態度和行為的培養',
         '全校參與照顧學生的多樣性', '全校參與模式融合教育', '非華語學生的教育支援', '課程剪裁及調適措施',
