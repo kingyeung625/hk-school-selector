@@ -51,7 +51,6 @@ def format_and_highlight_text(text, keywords):
             html_output += f'<div style="margin-left: 2em; text-indent: -2em; padding-top: 5px;">{marker} {content}</div>'
     html_output += '</p>'
     if keywords:
-        #
         flat_keywords = []
         for item in keywords:
             if isinstance(item, list):
@@ -60,7 +59,7 @@ def format_and_highlight_text(text, keywords):
                 flat_keywords.append(item)
         
         pattern = '|'.join([re.escape(keyword) for keyword in flat_keywords])
-        if pattern: # Ensure pattern is not empty
+        if pattern:
             html_output = re.sub(
                 pattern,
                 lambda match: f'<span style="background-color: yellow;">{match.group(0)}</span>',
@@ -88,7 +87,6 @@ def process_dataframe(df, articles_df=None):
     else:
         df['articles'] = [[] for _ in range(len(df))]
     
-    # --- 新增：建立一個包含所有文字的欄位用於全局搜尋 ---
     df['full_text_search'] = df.astype(str).agg(' '.join, axis=1)
 
     text_columns_for_features = [
@@ -131,6 +129,16 @@ def process_dataframe(df, articles_df=None):
         if col in df.columns:
             df[new_name] = df[col].apply(lambda x: '是' if str(x).strip().lower() in ['有', 'yes'] else '否')
     
+    if '學校類別' in df.columns:
+        def standardize_category(cat):
+            cat_str = str(cat)
+            if '官立' in cat_str: return '官立'
+            if '直資' in cat_str: return '直資'
+            if '資助' in cat_str: return '資助'
+            if '私立' in cat_str: return '私立'
+            return cat
+        df['學校類別'] = df['學校類別'].apply(standardize_category)
+
     bus_series = df['校車服務'].fillna('沒有').astype(str) if '校車服務' in df.columns else pd.Series('沒有', index=df.index)
     has_bus_data = bus_series.str.strip().isin(['', '沒有']) == False
     df['has_school_bus'] = '否'
@@ -199,11 +207,19 @@ try:
                 selected_lang = st.selectbox("教育語言", options=lang_options)
                 if selected_lang != '不限': active_filters.append(('language', selected_lang))
         with col2:
+            # --- 修改開始：更新辦學團體篩選器的邏輯 ---
             if '辦學團體' in processed_df.columns:
                 body_counts = processed_df['辦學團體'].value_counts()
-                body_options = sorted(body_counts[body_counts >= 2].index)
-                selected_bodies = st.multiselect("辦學團體 (只顯示多於一間的團體)", options=body_options)
-                if selected_bodies: active_filters.append(('body', selected_bodies))
+                # 格式化選項為 "名稱 (數量)"，並保持 value_counts 的預設排序（由多到少）
+                formatted_body_options = [f"{body} ({count})" for body, count in body_counts.items()]
+                
+                selected_formatted_bodies = st.multiselect("辦學團體", options=formatted_body_options)
+                
+                if selected_formatted_bodies:
+                    # 從選擇的格式化字串中解析出原始的辦學團體名稱以進行篩選
+                    original_body_names = [item.rsplit(' (', 1)[0] for item in selected_formatted_bodies]
+                    active_filters.append(('body', original_body_names))
+            # --- 修改結束 ---
             
             feeder_choice = st.radio("有關聯中學？", ['不限', '是', '否'], horizontal=True, key='feeder')
             if feeder_choice != '不限': active_filters.append(('feeder', feeder_choice))
@@ -221,7 +237,6 @@ try:
             selected_nets = st.multiselect("**選擇校網 (可多選)**", options=available_nets)
             if selected_nets: active_filters.append(('net', selected_nets))
     with st.expander("🌟 按辦學特色搜尋", expanded=False):
-        # --- 新增：全局關鍵字搜尋欄 ---
         full_search_term = st.text_input("輸入任何關鍵字搜尋全校資料 (例如：奧數、面試班):")
         if full_search_term:
             active_filters.append(('full_text', full_search_term))
@@ -278,12 +293,11 @@ try:
             elif filter_type == 'body': filtered_df = filtered_df[filtered_df['辦學團體'].isin(value)]
             elif filter_type == 'feeder': filtered_df = filtered_df[filtered_df['has_feeder_school'] == value]
             elif filter_type == 'bus': filtered_df = filtered_df[filtered_df['has_school_bus'] == value]
-            elif filter_type == 'district': filtered_df = filtered_df[filtered_df['地區'].isin(value)]
-            elif filter_type == 'net': filtered_df = filtered_df[filtered_df['校網'].isin(value)]
-            # --- 新增：全局關鍵字篩選邏輯 ---
             elif filter_type == 'full_text':
                 filtered_df = filtered_df[filtered_df['full_text_search'].str.contains(value, case=False, na=False)]
                 all_selected_keywords_for_highlight.append(value)
+            elif filter_type == 'district': filtered_df = filtered_df[filtered_df['地區'].isin(value)]
+            elif filter_type == 'net': filtered_df = filtered_df[filtered_df['校網'].isin(value)]
             elif filter_type == 'features':
                 for option in value:
                     search_terms = [];
@@ -393,20 +407,20 @@ try:
                             if edu_df['比例'].sum() > 0:
                                 fig1 = px.pie(edu_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Greens_r)
                                 fig1.update_layout(
-                                    showlegend=False, margin=dict(l=100, r=100, t=60, b=60), height=350, font=dict(size=16),
+                                    showlegend=False, margin=dict(l=70, r=70, t=40, b=40), height=380, font=dict(size=16),
                                     uniformtext_minsize=14, uniformtext_mode='hide'
                                 )
-                                fig1.update_traces(textposition='outside', textinfo='percent+label'); st.plotly_chart(fig1, use_container_width=True, key=f"edu_pie_{index}")
+                                fig1.update_traces(textposition='inside', textinfo='percent+label', textfont_color='white'); st.plotly_chart(fig1, use_container_width=True, key=f"edu_pie_{index}")
                             else: st.text("無相關數據")
                         with pie_col2:
                             st.markdown("**年資分佈**"); exp_data = {'類別': ['0-4年', '5-9年', '10年以上'],'比例': [school.get('0-4年資 (佔全校教師人數%)', 0), school.get('5-9年資(佔全校教師人數%)', 0), school.get('10年或以上年資 (佔全校教師人數%)', 0)]}; exp_df = pd.DataFrame(exp_data)
                             if exp_df['比例'].sum() > 0:
                                 fig2 = px.pie(exp_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Blues_r)
                                 fig2.update_layout(
-                                    showlegend=False, margin=dict(l=100, r=100, t=60, b=60), height=350, font=dict(size=16),
+                                    showlegend=False, margin=dict(l=70, r=70, t=40, b=40), height=380, font=dict(size=16),
                                     uniformtext_minsize=14, uniformtext_mode='hide'
                                 )
-                                fig2.update_traces(textposition='outside', textinfo='percent+label'); st.plotly_chart(fig2, use_container_width=True, key=f"exp_pie_{index}")
+                                fig2.update_traces(textposition='inside', textinfo='percent+label', textfont_color='white'); st.plotly_chart(fig2, use_container_width=True, key=f"exp_pie_{index}")
                             else: st.text("無相關數據")
                     st.markdown("---")
                     st.markdown("#### 📚 課業與評估安排")
