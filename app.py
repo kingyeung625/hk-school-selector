@@ -9,13 +9,10 @@ from bs4 import BeautifulSoup
 # --- Streamlit 應用程式介面 ---
 st.set_page_config(page_title="「01教育」小學概覽搜尋器", layout="centered")
 st.title('「01教育」小學概覽搜尋器')
-
-# --- 修改：第一個廣告空間位置 ---
 st.markdown(
     '<div style="border: 2px dashed #cccccc; padding: 20px; text-align: center; margin-top: 20px; margin-bottom: 20px;">廣告空間</div>',
     unsafe_allow_html=True
 )
-
 st.write("使用下方的篩選器來尋找心儀的學校。")
 
 # --- 初始化 Session State ---
@@ -157,7 +154,18 @@ def process_dataframe(df, articles_df=None):
     df.loc[cond_both, 'bus_service_text'] = '有校車及保姆車'
     df.loc[cond_bus_only, 'bus_service_text'] = '有校車'
     df.loc[cond_nanny_only, 'bus_service_text'] = '有保姆車'
-    
+
+    df['fees_text'] = '沒有'
+    if '學費' in df.columns:
+        mask_fee = df['學費'].notna() & (df['學費'].astype(str).str.strip() != '') & (df['學費'].astype(str).str.strip() != '沒有')
+        df.loc[mask_fee, 'fees_text'] = "學費: " + df['學費'].astype(str)
+    if '堂費' in df.columns:
+        mask_sub = df['堂費'].notna() & (df['堂費'].astype(str).str.strip() != '') & (df['堂費'].astype(str).str.strip() != '沒有')
+        mask_both = (df['fees_text'] != '沒有') & mask_sub
+        df.loc[mask_both, 'fees_text'] += ' | ' + "堂費: " + df['堂費'].astype(str)
+        mask_sub_only = (df['fees_text'] == '沒有') & mask_sub
+        df.loc[mask_sub_only, 'fees_text'] = "堂費: " + df['堂費'].astype(str)
+
     feeder_cols = ['一條龍中學', '直屬中學', '聯繫中學']
     existing_feeder_cols = [col for col in feeder_cols if col in df.columns]
     if existing_feeder_cols:
@@ -240,7 +248,6 @@ try:
             selected_nets = st.multiselect("**選擇校網 (可多選)**", options=available_nets, key="net_select")
             if selected_nets: active_filters.append(('net', selected_nets))
 
-    # --- 新增：第二個廣告空間位置 ---
     st.markdown(
         '<div style="border: 2px dashed #cccccc; padding: 20px; text-align: center; margin-top: 20px; margin-bottom: 20px;">廣告空間</div>',
         unsafe_allow_html=True
@@ -372,7 +379,6 @@ try:
             elif filter_type == 'avoid_holiday': filtered_df = filtered_df[filtered_df['avoid_holiday_exams'] == value]
             elif filter_type == 'afternoon_tut': filtered_df = filtered_df[filtered_df['afternoon_tutorial'] == value]
         
-        # --- 修改：在顯示結果總數前插入 YouTube 影片 ---
         st.video("https://www.youtube.com/watch?v=5LNrTnWvuho")
         st.info(f"綜合所有條件，共找到 {len(filtered_df)} 所學校。")
         
@@ -425,6 +431,11 @@ try:
                     feeder_schools = {"一條龍中學": school.get('一條龍中學'), "直屬中學": school.get('直屬中學'), "聯繫中學": school.get('聯繫中學')}
                     for title, value in feeder_schools.items():
                         if pd.notna(value) and str(value).strip() not in ['', '沒有']: st.write(f"**{title}:** {value}")
+                    
+                    st.markdown(
+                        '<div style="border: 2px dashed #cccccc; padding: 15px; text-align: center; margin-top: 15px; margin-bottom: 15px;">廣告空間</div>',
+                        unsafe_allow_html=True
+                    )
                     
                     st.markdown("---")
                     st.markdown("#### 🏫 學校設施詳情")
@@ -479,6 +490,12 @@ try:
                                 )
                                 fig2.update_traces(textposition='inside', textinfo='percent+label', textfont_color='white'); st.plotly_chart(fig2, use_container_width=True, key=f"exp_pie_{index}")
                             else: st.text("無相關數據")
+                    
+                    st.markdown(
+                        '<div style="border: 2px dashed #cccccc; padding: 15px; text-align: center; margin-top: 15px; margin-bottom: 15px;">廣告空間</div>',
+                        unsafe_allow_html=True
+                    )
+
                     st.markdown("---")
                     st.markdown("#### 📚 課業與評估安排")
                     homework_details = {"小一測驗/考試次數": f"{school.get('一年級全年全科測驗次數', 'N/A')} / {school.get('一年級全年全科考試次數', 'N/A')}", "高年級測驗/考試次數": f"{school.get('二至六年級全年全科測驗次數', 'N/A')} / {school.get('二至六年級全年全科考試次數', 'N/A')}", "小一免試評估": school.get('p1_no_exam_assessment', 'N/A'), "多元學習評估": school.get('多元學習評估', '未提供'), "避免長假後測考": school.get('avoid_holiday_exams', 'N/A'), "下午導修時段": school.get('afternoon_tutorial', 'N/A')}
@@ -513,6 +530,11 @@ try:
                             with st.expander(f"**{display_title}**", expanded=should_expand):
                                 formatted_content = format_and_highlight_text(detail_value, all_selected_keywords_for_highlight)
                                 st.markdown(formatted_content, unsafe_allow_html=True)
+                    
+                    st.markdown(
+                        '<div style="border: 2px dashed #cccccc; padding: 15px; text-align: center; margin-top: 15px; margin-bottom: 15px;">廣告空間</div>',
+                        unsafe_allow_html=True
+                    )
 
             st.markdown("---")
             col1, col2, col3 = st.columns([2, 3, 2])
