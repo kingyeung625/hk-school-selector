@@ -251,12 +251,46 @@ try:
         with col2: selected2 = st.multiselect("價值觀與品德", options=list(feature_mapping["【價值觀與品德】"].keys()), key="features2"); all_selected_options.extend(selected2)
         with col3: selected3 = st.multiselect("學生支援與發展", options=list(feature_mapping["【學生支援與發展】"].keys()), key="features3"); all_selected_options.extend(selected3)
         if all_selected_options: active_filters.append(('features', all_selected_options))
+    
+    # --- 修改開始：更新師資條件搜尋的版面 ---
     with st.expander("🎓 按師資條件搜尋", expanded=False):
-        slider_options = {'已接受師資培訓(佔全校教師人數%)': '師資培訓比例 (%)', '學士(佔全校教師人數%)': '學士學歷比例 (%)', '碩士、博士或以上 (佔全校教師人數%)': '碩士或以上學歷比例 (%)', '特殊教育培訓 (佔全校教師人數%)': '特殊教育培訓比例 (%)', '0-4年資 (佔全校教師人數%)': '0-4年資比例 (%)', '5-9年資(佔全校教師人數%)': '5-9年資比例 (%)', '10年或以上年資 (佔全校教師人數%)': '10年以上年資比例 (%)'}
-        for col_name, slider_label in slider_options.items():
-            if col_name in processed_df.columns:
-                min_val = st.slider(slider_label, 0, 100, 0, 5, key=col_name)
-                if min_val > 0: active_filters.append(('slider', (col_name, min_val)))
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            # st.markdown("**學歷與培訓**")
+            col1_sliders = {
+                '已接受師資培訓(佔全校教師人數%)': '師資培訓比例 (%)',
+                '學士(佔全校教師人數%)': '學士學歷比例 (%)',
+                '碩士、博士或以上 (佔全校教師人數%)': '碩士或以上學歷比例 (%)'
+            }
+            for col_name, slider_label in col1_sliders.items():
+                if col_name in processed_df.columns:
+                    min_val = st.slider(slider_label, 0, 100, 0, 5, key=col_name)
+                    if min_val > 0: active_filters.append(('slider', (col_name, min_val)))
+
+        with col2:
+            # st.markdown("**年資分佈**")
+            col2_sliders = {
+                '0-4年資 (佔全校教師人數%)': '0-4年資比例 (%)',
+                '5-9年資(佔全校教師人數%)': '5-9年資比例 (%)',
+                '10年或以上年資 (佔全校教師人數%)': '10年以上年資比例 (%)'
+            }
+            for col_name, slider_label in col2_sliders.items():
+                if col_name in processed_df.columns:
+                    min_val = st.slider(slider_label, 0, 100, 0, 5, key=col_name)
+                    if min_val > 0: active_filters.append(('slider', (col_name, min_val)))
+
+        with col3:
+            # st.markdown("**專業發展**")
+            col3_sliders = {
+                '特殊教育培訓 (佔全校教師人數%)': '特殊教育培訓比例 (%)'
+            }
+            for col_name, slider_label in col3_sliders.items():
+                if col_name in processed_df.columns:
+                    min_val = st.slider(slider_label, 0, 100, 0, 5, key=col_name)
+                    if min_val > 0: active_filters.append(('slider', (col_name, min_val)))
+    # --- 修改結束 ---
+
     with st.expander("📚 按課業安排搜尋", expanded=False):
         st.markdown("**評估次數**"); col1, col2 = st.columns(2)
         with col1:
@@ -275,8 +309,7 @@ try:
         if avoid_holiday != '不限': active_filters.append(('avoid_holiday', avoid_holiday))
         afternoon_tut = st.radio("設下午導修時段？", ['不限', '是', '否'], horizontal=True, key='tutorial')
         if afternoon_tut != '不限': active_filters.append(('afternoon_tut', afternoon_tut))
-
-    # --- 新增：重設按鈕 ---
+    
     def reset_filters():
         keys_to_reset = [
             "name_search", "category_select", "gender_select", "religion_select",
@@ -377,16 +410,16 @@ try:
                         st.write(f"**創校年份:** {school.get('創校年份', '未提供')}")
                         st.write(f"**校長:** {school.get('校長_', '未提供')}")
                         st.write(f"**教學語言:** {school.get('教學語言', '未提供')}")
+                        st.write(f"**學費/堂費:** {school.get('fees_text', '沒有')}")
                     with info_col2:
                         st.write(f"**學生性別:** {school.get('學生性別', '未提供')}")
                         st.write(f"**宗教:** {school.get('宗教', '未提供')}")
                         st.write(f"**校網:** {school.get('校網', '未提供')}")
                         st.write(f"**校監:** {school.get('校監／學校管理委員會主席', '未提供')}")
                         st.write(f"**家教會:** {school.get('has_pta', '未提供')}")
+                        st.write(f"**校車服務:** {school.get('bus_service_text', '沒有')}")
 
                     st.write(f"**學校佔地面積:** {school.get('學校佔地面積', '未提供')}")
-                    st.write(f"**學費/堂費:** {school.get('fees_text', '沒有')}")
-                    st.write(f"**校車服務:** {school.get('bus_service_text', '沒有')}")
                     
                     feeder_schools = {"一條龍中學": school.get('一條龍中學'), "直屬中學": school.get('直屬中學'), "聯繫中學": school.get('聯繫中學')}
                     for title, value in feeder_schools.items():
@@ -485,20 +518,16 @@ try:
             
             with col1:
                 st.button("重設搜尋器", on_click=reset_filters, key="reset_button_bottom")
-            
+
             if total_pages > 1:
                 with col1:
                     if st.session_state.page > 0:
-                        if st.button("⬅️ 上一頁", key="prev_page"):
-                            st.session_state.page -= 1
-                            st.rerun()
+                        st.button("⬅️ 上一頁", on_click=lambda: st.session_state.update(page=st.session_state.page - 1), key="prev_page")
                 with col2:
                     st.write(f"頁數: {st.session_state.page + 1} / {total_pages}")
                 with col3:
                     if st.session_state.page < total_pages - 1:
-                        if st.button("下一頁 ➡️", key="next_page"):
-                            st.session_state.page += 1
-                            st.rerun()
+                        st.button("下一頁 ➡️", on_click=lambda: st.session_state.update(page=st.session_state.page + 1), key="next_page")
 
 except FileNotFoundError:
     st.error(f"錯誤：找不到資料檔案 '{DATA_URL}'。")
