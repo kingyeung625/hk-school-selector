@@ -295,8 +295,7 @@ try:
                 del st.session_state[key]
         st.session_state.page = 0
     
-    st.button("重設搜尋器", on_click=reset_filters)
-    # --- 新增結束 ---
+    st.button("重設搜尋器", on_click=reset_filters, key="reset_button_top")
     
     if active_filters != st.session_state.get('active_filters_cache', None):
         st.session_state.page = 0
@@ -483,6 +482,10 @@ try:
 
             st.markdown("---")
             col1, col2, col3 = st.columns([2, 3, 2])
+            
+            with col1:
+                st.button("重設搜尋器", on_click=reset_filters, key="reset_button_bottom")
+            
             if total_pages > 1:
                 with col1:
                     if st.session_state.page > 0:
@@ -496,6 +499,7 @@ try:
                         if st.button("下一頁 ➡️", key="next_page"):
                             st.session_state.page += 1
                             st.rerun()
+
 except FileNotFoundError:
     st.error(f"錯誤：找不到資料檔案 '{DATA_URL}'。")
     st.info("請確認您已將正確的 Raw URL 貼入程式碼中。")
