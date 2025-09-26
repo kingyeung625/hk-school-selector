@@ -51,13 +51,22 @@ def format_and_highlight_text(text, keywords):
             html_output += f'<div style="margin-left: 2em; text-indent: -2em; padding-top: 5px;">{marker} {content}</div>'
     html_output += '</p>'
     if keywords:
-        pattern = '|'.join([re.escape(keyword) for keyword in keywords])
-        html_output = re.sub(
-            pattern,
-            lambda match: f'<span style="background-color: yellow;">{match.group(0)}</span>',
-            html_output,
-            flags=re.IGNORECASE
-        )
+        #
+        flat_keywords = []
+        for item in keywords:
+            if isinstance(item, list):
+                flat_keywords.extend(item)
+            else:
+                flat_keywords.append(item)
+        
+        pattern = '|'.join([re.escape(keyword) for keyword in flat_keywords])
+        if pattern: # Ensure pattern is not empty
+            html_output = re.sub(
+                pattern,
+                lambda match: f'<span style="background-color: yellow;">{match.group(0)}</span>',
+                html_output,
+                flags=re.IGNORECASE
+            )
     return html_output
 
 # --- 核心功能函式 (處理資料) ---
@@ -78,6 +87,9 @@ def process_dataframe(df, articles_df=None):
             df['articles'] = [[] for _ in range(len(df))]
     else:
         df['articles'] = [[] for _ in range(len(df))]
+    
+    # --- 新增：建立一個包含所有文字的欄位用於全局搜尋 ---
+    df['full_text_search'] = df.astype(str).agg(' '.join, axis=1)
 
     text_columns_for_features = [
         '學校關注事項', '學習和教學策略', '小學教育課程更新重點的發展', '共通能力的培養', '正確價值觀、態度和行為的培養',
@@ -155,7 +167,6 @@ def process_dataframe(df, articles_df=None):
 
 # --- 主要應用程式邏輯 ---
 try:
-    # --- 修改：從固定的 URL 讀取資料 ---
     DATA_URL = "https://raw.githubusercontent.com/kingyeung625/hk-school-selector/3f177778e7a09e9d890e77d07017c2a7364cebb1/school_data_with_articles.xlsx"
     
     main_dataframe = pd.read_excel(DATA_URL, sheet_name='學校資料', engine='openpyxl')
@@ -210,6 +221,13 @@ try:
             selected_nets = st.multiselect("**選擇校網 (可多選)**", options=available_nets)
             if selected_nets: active_filters.append(('net', selected_nets))
     with st.expander("🌟 按辦學特色搜尋", expanded=False):
+        # --- 新增：全局關鍵字搜尋欄 ---
+        full_search_term = st.text_input("輸入任何關鍵字搜尋全校資料 (例如：奧數、面試班):")
+        if full_search_term:
+            active_filters.append(('full_text', full_search_term))
+        st.markdown("---")
+        st.markdown("**按預設標籤篩選：**")
+
         feature_mapping = {"【教學模式與重點】": {"自主學習及探究": ['自主學習', '探究'],"STEAM": ['STEAM', '創客'], "電子學習": ['電子學習', 'e-learning'], "閱讀": ['閱讀'], "資優教育": ['資優'], "專題研習": ['專題研習'], "跨課程學習": ['跨課程'], "兩文三語": ['兩文三語'], "英文教育": ['英文'], "家校合作": ['家校合作'], "境外交流": ['境外交流'], "藝術": ['藝術'], "體育": ['體育']},"【價值觀與品德】": {"中華文化教育": ['中華文化'], "正向、價值觀、生命教育": ['正向', '價值觀', '生命教育'], "國民教育、國安教育": ['國民', '國安'], "服務教育": ['服務'], "關愛及精神健康": ['關愛', '健康']},"【學生支援與發展】": {"全人發展": ['全人發展', '多元發展'], "生涯規劃、啟發潛能": ['生涯規劃', '潛能'], "拔尖補底、照顧差異": ['拔尖補底', '個別差異'], "融合教育": ['融合教育']}}
         col1, col2, col3 = st.columns(3); all_selected_options = []
         with col1: selected1 = st.multiselect("教學模式與重點", options=list(feature_mapping["【教學模式與重點】"].keys())); all_selected_options.extend(selected1)
@@ -262,11 +280,15 @@ try:
             elif filter_type == 'bus': filtered_df = filtered_df[filtered_df['has_school_bus'] == value]
             elif filter_type == 'district': filtered_df = filtered_df[filtered_df['地區'].isin(value)]
             elif filter_type == 'net': filtered_df = filtered_df[filtered_df['校網'].isin(value)]
+            # --- 新增：全局關鍵字篩選邏輯 ---
+            elif filter_type == 'full_text':
+                filtered_df = filtered_df[filtered_df['full_text_search'].str.contains(value, case=False, na=False)]
+                all_selected_keywords_for_highlight.append(value)
             elif filter_type == 'features':
                 for option in value:
                     search_terms = [];
                     for category in feature_mapping.values():
-                        if option in category: search_terms = category[option]; all_selected_keywords_for_highlight.extend(search_terms); break
+                        if option in category: search_terms = category[option]; all_selected_keywords_for_highlight.append(search_terms); break
                     if search_terms:
                         regex_pattern = '|'.join([re.escape(term) for term in search_terms])
                         filtered_df = filtered_df[filtered_df['features_text'].str.contains(regex_pattern, case=False, na=False, regex=True)]
@@ -408,7 +430,13 @@ try:
                             should_expand = False
                             if all_selected_keywords_for_highlight:
                                 text_to_check = str(detail_value).lower()
-                                if any(keyword.lower() in text_to_check for keyword in all_selected_keywords_for_highlight):
+                                flat_keywords = []
+                                for item in all_selected_keywords_for_highlight:
+                                    if isinstance(item, list):
+                                        flat_keywords.extend(item)
+                                    else:
+                                        flat_keywords.append(item)
+                                if any(keyword.lower() in text_to_check for keyword in flat_keywords):
                                     should_expand = True
                             
                             with st.expander(f"**{display_title}**", expanded=should_expand):
@@ -430,5 +458,8 @@ try:
                         if st.button("下一頁 ➡️", key="next_page"):
                             st.session_state.page += 1
                             st.rerun()
+except FileNotFoundError:
+    st.error(f"錯誤：找不到資料檔案 '{DATA_URL}'。")
+    st.info("請確認您已將正確的 Raw URL 貼入程式碼中。")
 except Exception as e:
     st.error(f"處理資料時發生錯誤：{e}")
