@@ -154,18 +154,7 @@ def process_dataframe(df, articles_df=None):
     df.loc[cond_both, 'bus_service_text'] = '有校車及保姆車'
     df.loc[cond_bus_only, 'bus_service_text'] = '有校車'
     df.loc[cond_nanny_only, 'bus_service_text'] = '有保姆車'
-
-    df['fees_text'] = '沒有'
-    if '學費' in df.columns:
-        mask_fee = df['學費'].notna() & (df['學費'].astype(str).str.strip() != '') & (df['學費'].astype(str).str.strip() != '沒有')
-        df.loc[mask_fee, 'fees_text'] = "學費: " + df['學費'].astype(str)
-    if '堂費' in df.columns:
-        mask_sub = df['堂費'].notna() & (df['堂費'].astype(str).str.strip() != '') & (df['堂費'].astype(str).str.strip() != '沒有')
-        mask_both = (df['fees_text'] != '沒有') & mask_sub
-        df.loc[mask_both, 'fees_text'] += ' | ' + "堂費: " + df['堂費'].astype(str)
-        mask_sub_only = (df['fees_text'] == '沒有') & mask_sub
-        df.loc[mask_sub_only, 'fees_text'] = "堂費: " + df['堂費'].astype(str)
-
+    
     feeder_cols = ['一條龍中學', '直屬中學', '聯繫中學']
     existing_feeder_cols = [col for col in feeder_cols if col in df.columns]
     if existing_feeder_cols:
@@ -426,6 +415,7 @@ try:
                         st.write(f"**家教會:** {school.get('has_pta', '未提供')}")
 
                     st.write(f"**學校佔地面積:** {school.get('學校佔地面積', '未提供')}")
+                    st.write(f"**學費/堂費:** {school.get('fees_text', '沒有')}")
                     st.write(f"**校車服務:** {school.get('bus_service_text', '沒有')}")
                     
                     feeder_schools = {"一條龍中學": school.get('一條龍中學'), "直屬中學": school.get('直屬中學'), "聯繫中學": school.get('聯繫中學')}
@@ -530,6 +520,13 @@ try:
                             with st.expander(f"**{display_title}**", expanded=should_expand):
                                 formatted_content = format_and_highlight_text(detail_value, all_selected_keywords_for_highlight)
                                 st.markdown(formatted_content, unsafe_allow_html=True)
+                        
+                        # --- 新增：在指定位置插入廣告空間 ---
+                        if column_name == "全校參與照顧學生的多樣性":
+                            st.markdown(
+                                '<div style="border: 2px dashed #cccccc; padding: 15px; text-align: center; margin-top: 15px; margin-bottom: 15px;">廣告空間</div>',
+                                unsafe_allow_html=True
+                            )
                     
                     st.markdown(
                         '<div style="border: 2px dashed #cccccc; padding: 15px; text-align: center; margin-top: 15px; margin-bottom: 15px;">廣告空間</div>',
@@ -537,20 +534,34 @@ try:
                     )
 
             st.markdown("---")
-            col1, col2, col3 = st.columns([2, 3, 2])
+            col1, col2, col3 = st.columns([1, 1, 1])
             
             with col1:
                 st.button("重設搜尋器", on_click=reset_filters, key="reset_button_bottom")
             
             if total_pages > 1:
-                with col1:
-                    if st.session_state.page > 0:
-                        st.button("⬅️ 上一頁", on_click=lambda: st.session_state.update(page=st.session_state.page - 1), key="prev_page")
-                with col2:
-                    st.write(f"頁數: {st.session_state.page + 1} / {total_pages}")
-                with col3:
-                    if st.session_state.page < total_pages - 1:
-                        st.button("下一頁 ➡️", on_click=lambda: st.session_state.update(page=st.session_state.page + 1), key="next_page")
+                page_selection_col, next_button_col = st.columns([2,1])
+                with page_selection_col:
+                    # 使用 selectbox 來選擇頁數
+                    page_options = [f"第 {i+1} 頁" for i in range(total_pages)]
+                    current_page_label = f"第 {st.session_state.page + 1} 頁"
+                    new_page_label = st.selectbox(
+                        "頁數",
+                        options=page_options,
+                        index=st.session_state.page,
+                        label_visibility="collapsed"
+                    )
+                    # 偵測 selectbox 的變化
+                    if new_page_label != current_page_label:
+                        st.session_state.page = page_options.index(new_page_label)
+                        st.rerun()
+
+                with next_button_col:
+                     if st.session_state.page > 0:
+                        st.button("⬅️ 上一頁", on_click=lambda: st.session_state.update(page=st.session_state.page - 1), key="prev_page", use_container_width=True)
+                     if st.session_state.page < total_pages - 1:
+                        st.button("下一頁 ➡️", on_click=lambda: st.session_state.update(page=st.session_state.page + 1), key="next_page", use_container_width=True)
+
 
 except FileNotFoundError:
     st.error(f"錯誤：找不到資料檔案 '{DATA_URL}'。")
