@@ -207,11 +207,22 @@ try:
                 selected_lang = st.selectbox("教育語言", options=lang_options)
                 if selected_lang != '不限': active_filters.append(('language', selected_lang))
         with col2:
-            # --- 修改開始：更新辦學團體篩選器的邏輯 ---
+            # --- 修改開始：更新辦學團體篩選器的排序邏輯 ---
             if '辦學團體' in processed_df.columns:
                 body_counts = processed_df['辦學團體'].value_counts()
-                # 格式化選項為 "名稱 (數量)"，並保持 value_counts 的預設排序（由多到少）
-                formatted_body_options = [f"{body} ({count})" for body, count in body_counts.items()]
+                
+                # 將 Series 轉換為 DataFrame 以便進行多重排序
+                body_df = body_counts.reset_index()
+                body_df.columns = ['辦學團體', 'count']
+                
+                # 1. 主要按學校數量 (count) 降序排
+                # 2. 次要按辦學團體名稱的字典順序升序排
+                body_df_sorted = body_df.sort_values(by=['count', '辦學團體'], ascending=[False, True])
+                
+                # 格式化選項為 "名稱 (數量)"
+                formatted_body_options = [
+                    f"{row['辦學團體']} ({row['count']})" for index, row in body_df_sorted.iterrows()
+                ]
                 
                 selected_formatted_bodies = st.multiselect("辦學團體", options=formatted_body_options)
                 
