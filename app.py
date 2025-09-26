@@ -190,23 +190,29 @@ try:
     with st.expander("📝 按學校名稱搜尋", expanded=True):
         search_keyword = st.text_input("**輸入學校名稱關鍵字：**", key="name_search")
         if search_keyword: active_filters.append(('name', search_keyword))
+    
+    # --- 修改開始：更新「按學校基本資料搜尋」的版面為三欄 ---
     with st.expander("ℹ️ 按學校基本資料搜尋", expanded=True):
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
             if '學校類別' in processed_df.columns:
-                cat_options = sorted(processed_df['學校類別'].dropna().unique()); selected_cats = st.multiselect("學校類別", options=cat_options, key="category_select")
+                cat_options = sorted(processed_df['學校類別'].dropna().unique())
+                selected_cats = st.multiselect("學校類別", options=cat_options, key="category_select")
                 if selected_cats: active_filters.append(('category', selected_cats))
             if '學生性別' in processed_df.columns:
-                gender_options = sorted(processed_df['學生性別'].dropna().unique()); selected_genders = st.multiselect("學生性別", options=gender_options, key="gender_select")
+                gender_options = sorted(processed_df['學生性別'].dropna().unique())
+                selected_genders = st.multiselect("學生性別", options=gender_options, key="gender_select")
                 if selected_genders: active_filters.append(('gender', selected_genders))
+        with col2:
             if '宗教' in processed_df.columns:
-                religion_options = sorted(processed_df['宗教'].dropna().unique()); selected_religions = st.multiselect("宗教", options=religion_options, key="religion_select")
+                religion_options = sorted(processed_df['宗教'].dropna().unique())
+                selected_religions = st.multiselect("宗教", options=religion_options, key="religion_select")
                 if selected_religions: active_filters.append(('religion', selected_religions))
             if '教學語言' in processed_df.columns:
                 lang_options = ['不限'] + sorted(processed_df['教學語言'].dropna().unique())
                 selected_lang = st.selectbox("教育語言", options=lang_options, key="language_select")
                 if selected_lang != '不限': active_filters.append(('language', selected_lang))
-        with col2:
+        with col3:
             if '辦學團體' in processed_df.columns:
                 body_counts = processed_df['辦學團體'].value_counts()
                 body_df = body_counts.reset_index()
@@ -228,6 +234,8 @@ try:
             
             bus_choice = st.radio("有校車或保姆車服務？", ['不限', '是', '否'], horizontal=True, key='bus')
             if bus_choice != '不限': active_filters.append(('bus', bus_choice))
+    # --- 修改結束 ---
+
     with st.expander("📍 按地區及校網搜尋", expanded=False):
         col1, col2 = st.columns(2)
         with col1:
@@ -252,12 +260,9 @@ try:
         with col3: selected3 = st.multiselect("學生支援與發展", options=list(feature_mapping["【學生支援與發展】"].keys()), key="features3"); all_selected_options.extend(selected3)
         if all_selected_options: active_filters.append(('features', all_selected_options))
     
-    # --- 修改開始：更新師資條件搜尋的版面 ---
     with st.expander("🎓 按師資條件搜尋", expanded=False):
         col1, col2, col3 = st.columns(3)
-        
         with col1:
-            # st.markdown("**學歷與培訓**")
             col1_sliders = {
                 '已接受師資培訓(佔全校教師人數%)': '師資培訓比例 (%)',
                 '學士(佔全校教師人數%)': '學士學歷比例 (%)',
@@ -267,9 +272,7 @@ try:
                 if col_name in processed_df.columns:
                     min_val = st.slider(slider_label, 0, 100, 0, 5, key=col_name)
                     if min_val > 0: active_filters.append(('slider', (col_name, min_val)))
-
         with col2:
-            # st.markdown("**年資分佈**")
             col2_sliders = {
                 '0-4年資 (佔全校教師人數%)': '0-4年資比例 (%)',
                 '5-9年資(佔全校教師人數%)': '5-9年資比例 (%)',
@@ -279,9 +282,7 @@ try:
                 if col_name in processed_df.columns:
                     min_val = st.slider(slider_label, 0, 100, 0, 5, key=col_name)
                     if min_val > 0: active_filters.append(('slider', (col_name, min_val)))
-
         with col3:
-            # st.markdown("**專業發展**")
             col3_sliders = {
                 '特殊教育培訓 (佔全校教師人數%)': '特殊教育培訓比例 (%)'
             }
@@ -289,7 +290,6 @@ try:
                 if col_name in processed_df.columns:
                     min_val = st.slider(slider_label, 0, 100, 0, 5, key=col_name)
                     if min_val > 0: active_filters.append(('slider', (col_name, min_val)))
-    # --- 修改結束 ---
 
     with st.expander("📚 按課業安排搜尋", expanded=False):
         st.markdown("**評估次數**"); col1, col2 = st.columns(2)
