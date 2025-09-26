@@ -188,49 +188,40 @@ try:
     
     active_filters = []
     with st.expander("📝 按學校名稱搜尋", expanded=True):
-        search_keyword = st.text_input("**輸入學校名稱關鍵字：**")
+        search_keyword = st.text_input("**輸入學校名稱關鍵字：**", key="name_search")
         if search_keyword: active_filters.append(('name', search_keyword))
     with st.expander("ℹ️ 按學校基本資料搜尋", expanded=True):
         col1, col2 = st.columns(2)
         with col1:
             if '學校類別' in processed_df.columns:
-                cat_options = sorted(processed_df['學校類別'].dropna().unique()); selected_cats = st.multiselect("學校類別", options=cat_options)
+                cat_options = sorted(processed_df['學校類別'].dropna().unique()); selected_cats = st.multiselect("學校類別", options=cat_options, key="category_select")
                 if selected_cats: active_filters.append(('category', selected_cats))
             if '學生性別' in processed_df.columns:
-                gender_options = sorted(processed_df['學生性別'].dropna().unique()); selected_genders = st.multiselect("學生性別", options=gender_options)
+                gender_options = sorted(processed_df['學生性別'].dropna().unique()); selected_genders = st.multiselect("學生性別", options=gender_options, key="gender_select")
                 if selected_genders: active_filters.append(('gender', selected_genders))
             if '宗教' in processed_df.columns:
-                religion_options = sorted(processed_df['宗教'].dropna().unique()); selected_religions = st.multiselect("宗教", options=religion_options)
+                religion_options = sorted(processed_df['宗教'].dropna().unique()); selected_religions = st.multiselect("宗教", options=religion_options, key="religion_select")
                 if selected_religions: active_filters.append(('religion', selected_religions))
             if '教學語言' in processed_df.columns:
                 lang_options = ['不限'] + sorted(processed_df['教學語言'].dropna().unique())
-                selected_lang = st.selectbox("教育語言", options=lang_options)
+                selected_lang = st.selectbox("教育語言", options=lang_options, key="language_select")
                 if selected_lang != '不限': active_filters.append(('language', selected_lang))
         with col2:
-            # --- 修改開始：更新辦學團體篩選器的排序邏輯 ---
             if '辦學團體' in processed_df.columns:
                 body_counts = processed_df['辦學團體'].value_counts()
-                
-                # 將 Series 轉換為 DataFrame 以便進行多重排序
                 body_df = body_counts.reset_index()
                 body_df.columns = ['辦學團體', 'count']
-                
-                # 1. 主要按學校數量 (count) 降序排
-                # 2. 次要按辦學團體名稱的字典順序升序排
                 body_df_sorted = body_df.sort_values(by=['count', '辦學團體'], ascending=[False, True])
                 
-                # 格式化選項為 "名稱 (數量)"
                 formatted_body_options = [
                     f"{row['辦學團體']} ({row['count']})" for index, row in body_df_sorted.iterrows()
                 ]
                 
-                selected_formatted_bodies = st.multiselect("辦學團體", options=formatted_body_options)
+                selected_formatted_bodies = st.multiselect("辦學團體", options=formatted_body_options, key="body_select")
                 
                 if selected_formatted_bodies:
-                    # 從選擇的格式化字串中解析出原始的辦學團體名稱以進行篩選
                     original_body_names = [item.rsplit(' (', 1)[0] for item in selected_formatted_bodies]
                     active_filters.append(('body', original_body_names))
-            # --- 修改結束 ---
             
             feeder_choice = st.radio("有關聯中學？", ['不限', '是', '否'], horizontal=True, key='feeder')
             if feeder_choice != '不限': active_filters.append(('feeder', feeder_choice))
@@ -240,15 +231,15 @@ try:
     with st.expander("📍 按地區及校網搜尋", expanded=False):
         col1, col2 = st.columns(2)
         with col1:
-            all_districts = sorted(processed_df['地區'].dropna().unique()); selected_districts = st.multiselect("**選擇地區 (可多選)**", options=all_districts)
+            all_districts = sorted(processed_df['地區'].dropna().unique()); selected_districts = st.multiselect("**選擇地區 (可多選)**", options=all_districts, key="district_select")
             if selected_districts: active_filters.append(('district', selected_districts))
         with col2:
             if selected_districts: available_nets = sorted(processed_df[processed_df['地區'].isin(selected_districts)]['校網'].dropna().unique())
             else: available_nets = sorted(processed_df['校網'].dropna().unique())
-            selected_nets = st.multiselect("**選擇校網 (可多選)**", options=available_nets)
+            selected_nets = st.multiselect("**選擇校網 (可多選)**", options=available_nets, key="net_select")
             if selected_nets: active_filters.append(('net', selected_nets))
     with st.expander("🌟 按辦學特色搜尋", expanded=False):
-        full_search_term = st.text_input("輸入任何關鍵字搜尋全校資料 (例如：奧數、面試班):")
+        full_search_term = st.text_input("輸入任何關鍵字搜尋全校資料 (例如：奧數、面試班):", key="full_text_search")
         if full_search_term:
             active_filters.append(('full_text', full_search_term))
         st.markdown("---")
@@ -256,9 +247,9 @@ try:
 
         feature_mapping = {"【教學模式與重點】": {"自主學習及探究": ['自主學習', '探究'],"STEAM": ['STEAM', '創客'], "電子學習": ['電子學習', 'e-learning'], "閱讀": ['閱讀'], "資優教育": ['資優'], "專題研習": ['專題研習'], "跨課程學習": ['跨課程'], "兩文三語": ['兩文三語'], "英文教育": ['英文'], "家校合作": ['家校合作'], "境外交流": ['境外交流'], "藝術": ['藝術'], "體育": ['體育']},"【價值觀與品德】": {"中華文化教育": ['中華文化'], "正向、價值觀、生命教育": ['正向', '價值觀', '生命教育'], "國民教育、國安教育": ['國民', '國安'], "服務教育": ['服務'], "關愛及精神健康": ['關愛', '健康']},"【學生支援與發展】": {"全人發展": ['全人發展', '多元發展'], "生涯規劃、啟發潛能": ['生涯規劃', '潛能'], "拔尖補底、照顧差異": ['拔尖補底', '個別差異'], "融合教育": ['融合教育']}}
         col1, col2, col3 = st.columns(3); all_selected_options = []
-        with col1: selected1 = st.multiselect("教學模式與重點", options=list(feature_mapping["【教學模式與重點】"].keys())); all_selected_options.extend(selected1)
-        with col2: selected2 = st.multiselect("價值觀與品德", options=list(feature_mapping["【價值觀與品德】"].keys())); all_selected_options.extend(selected2)
-        with col3: selected3 = st.multiselect("學生支援與發展", options=list(feature_mapping["【學生支援與發展】"].keys())); all_selected_options.extend(selected3)
+        with col1: selected1 = st.multiselect("教學模式與重點", options=list(feature_mapping["【教學模式與重點】"].keys()), key="features1"); all_selected_options.extend(selected1)
+        with col2: selected2 = st.multiselect("價值觀與品德", options=list(feature_mapping["【價值觀與品德】"].keys()), key="features2"); all_selected_options.extend(selected2)
+        with col3: selected3 = st.multiselect("學生支援與發展", options=list(feature_mapping["【學生支援與發展】"].keys()), key="features3"); all_selected_options.extend(selected3)
         if all_selected_options: active_filters.append(('features', all_selected_options))
     with st.expander("🎓 按師資條件搜尋", expanded=False):
         slider_options = {'已接受師資培訓(佔全校教師人數%)': '師資培訓比例 (%)', '學士(佔全校教師人數%)': '學士學歷比例 (%)', '碩士、博士或以上 (佔全校教師人數%)': '碩士或以上學歷比例 (%)', '特殊教育培訓 (佔全校教師人數%)': '特殊教育培訓比例 (%)', '0-4年資 (佔全校教師人數%)': '0-4年資比例 (%)', '5-9年資(佔全校教師人數%)': '5-9年資比例 (%)', '10年或以上年資 (佔全校教師人數%)': '10年以上年資比例 (%)'}
@@ -278,12 +269,34 @@ try:
             if max_p1_exams != '任何次數': active_filters.append(('max_p1_exams', max_p1_exams))
             max_p2_6_exams = st.selectbox('二至六年級最多考試次數', options=['任何次數', 0, 1, 2, 3, 4], index=0, key='p2-6_exam')
             if max_p2_6_exams != '任何次數': active_filters.append(('max_p2_6_exams', max_p2_6_exams))
-        st.markdown("**其他安排**"); p1_no_exam = st.radio("小一上學期以多元化評估代替測考？", ['不限', '是', '否'], horizontal=True)
+        st.markdown("**其他安排**"); p1_no_exam = st.radio("小一上學期以多元化評估代替測考？", ['不限', '是', '否'], horizontal=True, key="p1_no_exam_radio")
         if p1_no_exam != '不限': active_filters.append(('p1_no_exam', p1_no_exam))
         avoid_holiday = st.radio("避免長假後測考？", ['不限', '是', '否'], horizontal=True, key='holiday')
         if avoid_holiday != '不限': active_filters.append(('avoid_holiday', avoid_holiday))
         afternoon_tut = st.radio("設下午導修時段？", ['不限', '是', '否'], horizontal=True, key='tutorial')
         if afternoon_tut != '不限': active_filters.append(('afternoon_tut', afternoon_tut))
+
+    # --- 新增：重設按鈕 ---
+    def reset_filters():
+        keys_to_reset = [
+            "name_search", "category_select", "gender_select", "religion_select",
+            "language_select", "body_select", "feeder", "bus", "district_select",
+            "net_select", "full_text_search", "features1", "features2", "features3",
+            "p1_test", "p2-6_test", "p1_exam", "p2-6_exam", "p1_no_exam_radio",
+            "holiday", "tutorial"
+        ]
+        slider_key_names = [
+            '已接受師資培訓(佔全校教師人數%)', '學士(佔全校教師人數%)', '碩士、博士或以上 (佔全校教師人數%)', '特殊教育培訓 (佔全校教師人數%)',
+            '0-4年資 (佔全校教師人數%)', '5-9年資(佔全校教師人數%)', '10年或以上年資 (佔全校教師人數%)'
+        ]
+        keys_to_reset.extend(slider_key_names)
+        for key in keys_to_reset:
+            if key in st.session_state:
+                del st.session_state[key]
+        st.session_state.page = 0
+    
+    st.button("重設搜尋器", on_click=reset_filters)
+    # --- 新增結束 ---
     
     if active_filters != st.session_state.get('active_filters_cache', None):
         st.session_state.page = 0
