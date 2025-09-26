@@ -11,6 +11,12 @@ st.set_page_config(page_title="「01教育」小學概覽搜尋器", layout="cen
 st.title('「01教育」小學概覽搜尋器')
 st.write("使用下方的篩選器來尋找心儀的學校。")
 
+# --- 新增：頂部橫幅廣告空間 ---
+st.markdown(
+    '<div style="border: 2px dashed #cccccc; padding: 20px; text-align: center; margin-top: 20px; margin-bottom: 20px;">廣告空間</div>',
+    unsafe_allow_html=True
+)
+
 # --- 初始化 Session State ---
 if 'page' not in st.session_state:
     st.session_state.page = 0
@@ -190,8 +196,6 @@ try:
     with st.expander("📝 按學校名稱搜尋", expanded=True):
         search_keyword = st.text_input("**輸入學校名稱關鍵字：**", key="name_search")
         if search_keyword: active_filters.append(('name', search_keyword))
-    
-    # --- 修改開始：更新「按學校基本資料搜尋」的版面為三欄 ---
     with st.expander("ℹ️ 按學校基本資料搜尋", expanded=True):
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -234,8 +238,6 @@ try:
             
             bus_choice = st.radio("有校車或保姆車服務？", ['不限', '是', '否'], horizontal=True, key='bus')
             if bus_choice != '不限': active_filters.append(('bus', bus_choice))
-    # --- 修改結束 ---
-
     with st.expander("📍 按地區及校網搜尋", expanded=False):
         col1, col2 = st.columns(2)
         with col1:
@@ -410,16 +412,16 @@ try:
                         st.write(f"**創校年份:** {school.get('創校年份', '未提供')}")
                         st.write(f"**校長:** {school.get('校長_', '未提供')}")
                         st.write(f"**教學語言:** {school.get('教學語言', '未提供')}")
-                        st.write(f"**學費/堂費:** {school.get('fees_text', '沒有')}")
                     with info_col2:
                         st.write(f"**學生性別:** {school.get('學生性別', '未提供')}")
                         st.write(f"**宗教:** {school.get('宗教', '未提供')}")
                         st.write(f"**校網:** {school.get('校網', '未提供')}")
                         st.write(f"**校監:** {school.get('校監／學校管理委員會主席', '未提供')}")
                         st.write(f"**家教會:** {school.get('has_pta', '未提供')}")
-                        st.write(f"**校車服務:** {school.get('bus_service_text', '沒有')}")
 
                     st.write(f"**學校佔地面積:** {school.get('學校佔地面積', '未提供')}")
+                    st.write(f"**學費/堂費:** {school.get('fees_text', '沒有')}")
+                    st.write(f"**校車服務:** {school.get('bus_service_text', '沒有')}")
                     
                     feeder_schools = {"一條龍中學": school.get('一條龍中學'), "直屬中學": school.get('直屬中學'), "聯繫中學": school.get('聯繫中學')}
                     for title, value in feeder_schools.items():
@@ -517,8 +519,11 @@ try:
             col1, col2, col3 = st.columns([2, 3, 2])
             
             with col1:
+                # Add a spacer to push the button down if there's no "Previous" button
+                if total_pages == 1 or st.session_state.page == 0:
+                    st.write("") # Invisible spacer
                 st.button("重設搜尋器", on_click=reset_filters, key="reset_button_bottom")
-
+            
             if total_pages > 1:
                 with col1:
                     if st.session_state.page > 0:
