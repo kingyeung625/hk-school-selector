@@ -30,10 +30,14 @@ def get_article_metadata(url):
         }
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
+        
         soup = BeautifulSoup(response.text, 'html.parser')
+        
         og_image_tag = soup.find('meta', property='og:image')
+        
         if og_image_tag and og_image_tag.get('content'):
             return og_image_tag['content']
+            
     except requests.RequestException:
         return None
     return None
@@ -90,34 +94,46 @@ def process_dataframe(df, articles_df=None):
     df['full_text_search'] = df.astype(str).agg(' '.join, axis=1)
 
     text_columns_for_features = [
-        '學校發展計劃', '學習和教學重點', '學校特色', '校風', '辦學宗旨', '全方位學習'
+        '學校關注事項', '學習和教學策略', '小學教育課程更新重點的發展', '共通能力的培養', '正確價值觀、態度和行為的培養',
+        '全校參與照顧學生的多樣性', '全校參與模式融合教育', '非華語學生的教育支援', '課程剪裁及調適措施',
+        '家校合作', '校風', '學校發展計劃', '教師專業培訓及發展', '其他未來發展', '辦學宗旨', '全方位學習', '特別室', '其他學校設施'
     ]
     existing_feature_columns = [col for col in text_columns_for_features if col in df.columns]
     df['features_text'] = df[existing_feature_columns].fillna('').astype(str).agg(' '.join, axis=1)
-    
-    # 處理百分比欄位
-    percentage_cols = {
-        '上學年已接受師資培訓人數百分率': '已接受師資培訓(佔全校教師人數%)',
-        '上學年學士人數百分率': '學士(佔全校教師人數%)',
-        '上學年碩士_博士或以上人數百分率': '碩士、博士或以上 (佔全校教師人數%)',
-        '上學年特殊教育培訓人數百分率': '特殊教育培訓 (佔全校教師人數%)',
-        '上學年0至4年年資人數百分率': '0-4年資 (佔全校教師人數%)',
-        '上學年5至9年年資人數百分率': '5-9年資(佔全校教師人數%)',
-        '上學年10年年資或以上人數百分率': '10年或以上年資 (佔全校教師人數%)'
-    }
-    for new_col, old_col_name in percentage_cols.items():
-        if new_col in df.columns:
-            s = pd.to_numeric(df[new_col].astype(str).str.replace('%', '', regex=False), errors='coerce').fillna(0)
+    percentage_cols = [
+        '已接受師資培訓(佔全校教師人數%)', '學士(佔全校教師人數%)', '碩士、博士或以上 (佔全校教師人數%)', '特殊教育培訓 (佔全校教師人數%)',
+        '0-4年資 (佔全校教師人數%)', '5-9年資(佔全校教師人數%)', '10年或以上年資 (佔全校教師人數%)'
+    ]
+    for col in percentage_cols:
+        if col in df.columns:
+            s = pd.to_numeric(df[col].astype(str).str.replace('%', '', regex=False), errors='coerce').fillna(0)
             if not s.empty and s.max() > 0 and s.max() <= 1: s = s * 100
-            df[old_col_name] = s.round(1)
-
-    # 處理布林值欄位
-    df['p1_no_exam_assessment'] = df['小一上學期測考'].apply(lambda x: '是' if str(x).strip() == '有' else '否') if '小一上學期測考' in df.columns else '否'
-    df['avoid_holiday_exams'] = df['長假期後測考'].apply(lambda x: '是' if str(x).strip() == '沒有' else '否') if '長假期後測考' in df.columns else '否'
-    df['afternoon_tutorial'] = df['下午家課輔導'].apply(lambda x: '是' if str(x).strip() == '有' else '否') if '下午家課輔導' in df.columns else '否'
-    df['has_pta'] = df['家長教師會'].apply(lambda x: '是' if str(x).strip() == '有' else '否') if '家長教師會' in df.columns else '否'
+            df[col] = s.round(1)
     
-    if '學校類別1' in df.columns:
+    teacher_count_cols = ['核准編制教師職位數目', '全校教師總人數']
+    for col in teacher_count_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    exam_count_cols = [
+        '一年級全年全科測驗次數', '一年級全年全科考試次數',
+        '二至六年級全年全科測驗次數', '二至六年級全年全科考試次數'
+    ]
+    for col in exam_count_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+            
+    yes_no_cols = {
+        '小一上學期以多元化的進展性評估代替測驗及考試': 'p1_no_exam_assessment',
+        '避免緊接在長假期後安排測考，讓學生在假期有充分的休息': 'avoid_holiday_exams',
+        '按校情靈活編排時間表，盡量在下午安排導修時段，讓學生能在教師指導下完成部分家課': 'afternoon_tutorial',
+        '家教會': 'has_pta'
+    }
+    for col, new_name in yes_no_cols.items():
+        if col in df.columns:
+            df[new_name] = df[col].apply(lambda x: '是' if str(x).strip().lower() in ['有', 'yes'] else '否')
+    
+    if '學校類別' in df.columns:
         def standardize_category(cat):
             cat_str = str(cat)
             if '官立' in cat_str: return '官立'
@@ -125,26 +141,25 @@ def process_dataframe(df, articles_df=None):
             if '資助' in cat_str: return '資助'
             if '私立' in cat_str: return '私立'
             return cat
-        df['學校類別'] = df['學校類別1'].apply(standardize_category)
-    else:
-        df['學校類別'] = '未提供'
+        df['學校類別'] = df['學校類別'].apply(standardize_category)
 
-    # 處理校車/保姆車
-    has_bus = df['校車'].astype(str).str.strip() == '有' if '校車' in df.columns else pd.Series(False, index=df.index)
-    has_nanny = df['保姆車'].astype(str).str.strip() == '有' if '保姆車' in df.columns else pd.Series(False, index=df.index)
+    bus_series = df['校車服務'].fillna('沒有').astype(str) if '校車服務' in df.columns else pd.Series('沒有', index=df.index)
+    has_bus_data = bus_series.str.strip().isin(['', '沒有']) == False
     df['has_school_bus'] = '否'
-    df.loc[has_bus | has_nanny, 'has_school_bus'] = '是'
+    df.loc[has_bus_data, 'has_school_bus'] = '是'
     df['bus_service_text'] = '沒有'
-    df.loc[has_bus & has_nanny, 'bus_service_text'] = '有校車及保姆車'
-    df.loc[has_bus & ~has_nanny, 'bus_service_text'] = '有校車'
-    df.loc[~has_bus & has_nanny, 'bus_service_text'] = '有保姆車'
-
-    # 處理關聯中學
+    cond_both = bus_series.str.contains("校車") & bus_series.str.contains("保姆車")
+    cond_bus_only = bus_series.str.contains("校車") & ~bus_series.str.contains("保姆車")
+    cond_nanny_only = ~bus_series.str.contains("校車") & bus_series.str.contains("保姆車")
+    df.loc[cond_both, 'bus_service_text'] = '有校車及保姆車'
+    df.loc[cond_bus_only, 'bus_service_text'] = '有校車'
+    df.loc[cond_nanny_only, 'bus_service_text'] = '有保姆車'
+    
     feeder_cols = ['一條龍中學', '直屬中學', '聯繫中學']
     existing_feeder_cols = [col for col in feeder_cols if col in df.columns]
     if existing_feeder_cols:
          df['has_feeder_school'] = df[existing_feeder_cols].apply(
-            lambda row: '是' if any(pd.notna(val) and str(val).strip() not in ['', '沒有']) for val in row) else '否',
+            lambda row: '是' if any(pd.notna(val) and str(val).strip() not in ['', '沒有'] for val in row) else '否',
             axis=1
         )
     else:
@@ -153,8 +168,7 @@ def process_dataframe(df, articles_df=None):
 
 # --- 主要應用程式邏輯 ---
 try:
-    # !!! 請將下面的 URL 替換為您自己的 GitHub Raw File URL !!!
-    DATA_URL = "https://raw.githubusercontent.com/kingyeung625/hk-school-selector/3f177778e7a09e9d890e77d07017c2a7364cebb1/school_data_with_articles.xlsx" # 範例 URL，請替換
+    DATA_URL = "https://raw.githubusercontent.com/kingyeung625/hk-school-selector/3f177778e7a09e9d890e77d07017c2a7364cebb1/school_data_with_articles.xlsx"
     
     main_dataframe = pd.read_excel(DATA_URL, sheet_name='學校資料', engine='openpyxl')
     
@@ -196,7 +210,10 @@ try:
                 body_df.columns = ['辦學團體', 'count']
                 body_df_sorted = body_df.sort_values(by=['count', '辦學團體'], ascending=[False, True])
                 
-                formatted_body_options = [f"{row['辦學團體']} ({row['count']})" for index, row in body_df_sorted.iterrows()]
+                formatted_body_options = [
+                    f"{row['辦學團體']} ({row['count']})" for index, row in body_df_sorted.iterrows()
+                ]
+                
                 selected_formatted_bodies = st.multiselect("辦學團體", options=formatted_body_options, key="body_select")
                 
                 if selected_formatted_bodies:
@@ -341,11 +358,8 @@ try:
                         filtered_df = filtered_df[filtered_df['features_text'].str.contains(regex_pattern, case=False, na=False, regex=True)]
             elif filter_type == 'slider':
                 col_name, min_val = value; 
-                # Use the mapped old column name for filtering
-                old_col_name = next((old for new, old in percentage_cols.items() if new == col_name), col_name)
-                if old_col_name in filtered_df.columns:
-                    filtered_df = filtered_df[filtered_df[old_col_name] >= min_val]
-
+                if col_name in filtered_df.columns:
+                    filtered_df = filtered_df[filtered_df[col_name] >= min_val]
             elif filter_type == 'max_p1_tests': filtered_df = filtered_df[filtered_df['小一全年測驗次數'] <= int(value)]
             elif filter_type == 'max_p2_6_tests': filtered_df = filtered_df[filtered_df['小二至小六全年測驗次數'] <= int(value)]
             elif filter_type == 'max_p1_exams': filtered_df = filtered_df[filtered_df['小一全年考試次數'] <= int(value)]
@@ -398,6 +412,7 @@ try:
                         st.write(f"**家教會:** {school.get('has_pta', '未提供')}")
 
                     st.write(f"**學校佔地面積:** {school.get('學校佔地面積', '未提供')}")
+                    st.write(f"**學費/堂費:** {school.get('fees_text', '沒有')}")
                     st.write(f"**校車服務:** {school.get('bus_service_text', '沒有')}")
                     
                     feeder_schools = {"一條龍中學": school.get('一條龍中學'), "直屬中學": school.get('直屬中學'), "聯繫中學": school.get('聯繫中學')}
