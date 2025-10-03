@@ -157,7 +157,7 @@ def process_dataframe(df, articles_df=None, net_df=None):
 # --- 主要應用程式邏輯 ---
 try:
     # --- 修改：已換上您最新的 database.xlsx 的 Raw URL ---
-    DATA_URL = "https://raw.githubusercontent.com/kingyeung625/hk-school-selector/main/database.xlsx"
+    DATA_URL = "https://raw.githubusercontent.com/kingyeung625/hk-school-selector/develop/database.xlsx"
     
     main_dataframe = pd.read_excel(DATA_URL, sheet_name='學校資料', engine='openpyxl')
     
@@ -515,3 +515,4 @@ except FileNotFoundError:
     st.info("請確認您已將正確的 Raw URL 貼入程式碼中。")
 except Exception as e:
     st.error(f"處理資料時發生錯誤：{e}")
+
