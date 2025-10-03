@@ -77,10 +77,8 @@ def format_and_highlight_text(text, keywords):
 def process_dataframe(df, articles_df=None, net_df=None):
     df.replace('-', '沒有', inplace=True)
 
-    # 合併校網資料
     if net_df is not None and not net_df.empty:
         if '學校名稱' in net_df.columns and '地區' in net_df.columns and '校網' in net_df.columns:
-            # 只選取需要的欄位進行合併
             df = pd.merge(df, net_df[['學校名稱', '地區', '校網']], on='學校名稱', how='left')
         else:
             st.warning("Excel 檔案中的「校網資料」工作表缺少必要的欄位（學校名稱, 地區, 校網）。")
@@ -158,19 +156,23 @@ def process_dataframe(df, articles_df=None, net_df=None):
 
 # --- 主要應用程式邏輯 ---
 try:
-    DATA_URL = "https://raw.githubusercontent.com/kingyeung625/hk-school-selector/main/database.xlsx" # 假設您的新檔名是 database.xlsx
+    # --- 修改：已換上您最新的 database.xlsx 的 Raw URL ---
+    DATA_URL = "https://raw.githubusercontent.com/kingyeung625/hk-school-selector/main/database.xlsx"
     
     main_dataframe = pd.read_excel(DATA_URL, sheet_name='學校資料', engine='openpyxl')
     
+    articles_dataframe = None
     try:
         articles_dataframe = pd.read_excel(DATA_URL, sheet_name='相關文章', engine='openpyxl')
     except Exception:
-        articles_dataframe = None
-        
+        st.info("提示：在 Excel 檔案中找不到名為「相關文章」的工作表。")
+
+    net_dataframe = None
     try:
         net_dataframe = pd.read_excel(DATA_URL, sheet_name='校網資料', engine='openpyxl')
     except Exception:
-        net_dataframe = None
+        st.info("提示：在 Excel 檔案中找不到名為「校網資料」的工作表。")
+
 
     processed_df = process_dataframe(main_dataframe, articles_dataframe, net_dataframe)
     
@@ -277,7 +279,7 @@ try:
         with col2:
             max_p1_exams = st.selectbox('小一全年最多考試次數', options=['任何次數', 0, 1, 2, 3], index=0, key='p1_exam')
             if max_p1_exams != '任何次數': active_filters.append(('max_p1_exams', max_p1_exams))
-            max_p2_6_exams = st.selectbox('二至六全年最多考試次數', options=['任何次數', 0, 1, 2, 3, 4], index=0, key='p2-6_exam')
+            max_p2_6_exams = st.selectbox('二至六年級最多考試次數', options=['任何次數', 0, 1, 2, 3, 4], index=0, key='p2-6_exam')
             if max_p2_6_exams != '任何次數': active_filters.append(('max_p2_6_exams', max_p2_6_exams))
         st.markdown("**其他安排**"); p1_no_exam = st.radio("小一上學期以多元化評估代替測考？", ['不限', '是', '否'], horizontal=True, key="p1_no_exam_radio")
         if p1_no_exam != '不限': active_filters.append(('p1_no_exam', p1_no_exam))
@@ -288,7 +290,7 @@ try:
     
     def reset_filters():
         keys_to_reset = [ "name_search", "category_select", "gender_select", "religion_select", "language_select", "body_select", "feeder", "bus", "district_select", "net_select", "full_text_search", "features1", "features2", "features3", "p1_test", "p2-6_test", "p1_exam", "p2-6_exam", "p1_no_exam_radio", "holiday", "tutorial"]
-        slider_key_names = list(col1_sliders.keys()) + list(col2_sliders.keys()) + list(col3_sliders.keys())
+        slider_key_names = list(percentage_cols.values())
         keys_to_reset.extend(slider_key_names)
         for key in keys_to_reset:
             if key in st.session_state:
@@ -391,6 +393,11 @@ try:
                     for title, value in feeder_schools.items():
                         if pd.notna(value) and str(value).strip() not in ['', '沒有']: st.write(f"**{title}:** {value}")
                     
+                    st.markdown(
+                        '<div style="border: 2px dashed #cccccc; padding: 15px; text-align: center; margin-top: 15px; margin-bottom: 15px;">廣告空間</div>',
+                        unsafe_allow_html=True
+                    )
+                    
                     st.markdown("---")
                     st.markdown("#### 🏫 學校設施詳情")
                     facility_counts = (f"🏫 課室: {school.get('課室數目', 'N/A')} | 🏛️ 禮堂: {school.get('禮堂數目', 'N/A')} | 🤸 操場: {school.get('操場數目', 'N/A')} | 📚 圖書館: {school.get('圖書館數目', 'N/A')}")
@@ -438,6 +445,12 @@ try:
                                 fig2.update_layout(showlegend=False, margin=dict(l=70, r=70, t=40, b=40), height=380, font=dict(size=16), uniformtext_minsize=14, uniformtext_mode='hide')
                                 fig2.update_traces(textposition='inside', textinfo='percent+label', textfont_color='white'); st.plotly_chart(fig2, use_container_width=True, key=f"exp_pie_{index}")
                             else: st.text("無相關數據")
+                    
+                    st.markdown(
+                        '<div style="border: 2px dashed #cccccc; padding: 15px; text-align: center; margin-top: 15px; margin-bottom: 15px;">廣告空間</div>',
+                        unsafe_allow_html=True
+                    )
+
                     st.markdown("---")
                     st.markdown("#### 📚 課業與評估安排")
                     homework_details = {"小一測驗/考試次數": f"{school.get('小一全年測驗次數', 'N/A')} / {school.get('小一全年考試次數', 'N/A')}", "高年級測驗/考試次數": f"{school.get('小二至小六全年測驗次數', 'N/A')} / {school.get('小二至小六全年考試次數', 'N/A')}", "小一免試評估": school.get('p1_no_exam_assessment', 'N/A'), "多元學習評估": school.get('多元學習評估', '未提供'), "避免長假後測考": school.get('avoid_holiday_exams', 'N/A'), "下午導修時段": school.get('afternoon_tutorial', 'N/A')}
@@ -465,6 +478,17 @@ try:
                             with st.expander(f"**{display_title}**", expanded=should_expand):
                                 formatted_content = format_and_highlight_text(detail_value, all_selected_keywords_for_highlight)
                                 st.markdown(formatted_content, unsafe_allow_html=True)
+
+                        if column_name == '學校特色': # Example of specific placement
+                            st.markdown(
+                                '<div style="border: 2px dashed #cccccc; padding: 15px; text-align: center; margin-top: 15px; margin-bottom: 15px;">廣告空間</div>',
+                                unsafe_allow_html=True
+                            )
+                    
+                    st.markdown(
+                        '<div style="border: 2px dashed #cccccc; padding: 15px; text-align: center; margin-top: 15px; margin-bottom: 15px;">廣告空間</div>',
+                        unsafe_allow_html=True
+                    )
 
             st.markdown("---")
             col1, col2, col3 = st.columns([1, 1, 1])
