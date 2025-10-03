@@ -116,7 +116,14 @@ def process_dataframe(df, articles_df=None, net_df=None):
         if new_col in df.columns:
             s = pd.to_numeric(df[new_col].astype(str).str.replace('%', '', regex=False), errors='coerce').fillna(0)
             df[old_col_name] = s.round(1)
-            
+
+    # --- 新增 ---
+    # 處理開班數字，轉換為數字格式以便篩選
+    if '本學年開班總數' in df.columns:
+        df['class_count_current_year'] = pd.to_numeric(df['本學年開班總數'], errors='coerce')
+    else:
+        df['class_count_current_year'] = pd.Series(dtype='float64')
+
     df['p1_no_exam_assessment'] = df['小一上學期測考'].apply(lambda x: '是' if str(x).strip() == '有' else '否') if '小一上學期測考' in df.columns else '否'
     df['avoid_holiday_exams'] = df['長假期後測考'].apply(lambda x: '是' if str(x).strip() == '沒有' else '否') if '長假期後測考' in df.columns else '否'
     df['afternoon_tutorial'] = df['下午家課輔導'].apply(lambda x: '是' if str(x).strip() == '有' else '否') if '下午家課輔導' in df.columns else '否'
@@ -288,8 +295,27 @@ try:
         afternoon_tut = st.radio("設下午導修時段？", ['不限', '是', '否'], horizontal=True, key='tutorial')
         if afternoon_tut != '不限': active_filters.append(('afternoon_tut', afternoon_tut))
     
+    # --- 新增 ---
+    with st.expander("🔎 按開班數字搜尋", expanded=False):
+        if 'class_count_current_year' in processed_df.columns and not processed_df['class_count_current_year'].isnull().all():
+            min_val = int(processed_df['class_count_current_year'].min())
+            max_val = int(processed_df['class_count_current_year'].max())
+            
+            selected_range = st.slider(
+                '本學年開班總數',
+                min_value=min_val,
+                max_value=max_val,
+                value=(min_val, max_val),
+                key='class_count_slider'
+            )
+
+            if selected_range != (min_val, max_val):
+                active_filters.append(('class_count', selected_range))
+        else:
+            st.info("資料庫暫未提供開班數字的資料。")
+
     def reset_filters():
-        keys_to_reset = [ "name_search", "category_select", "gender_select", "religion_select", "language_select", "body_select", "feeder", "bus", "district_select", "net_select", "full_text_search", "features1", "features2", "features3", "p1_test", "p2-6_test", "p1_exam", "p2-6_exam", "p1_no_exam_radio", "holiday", "tutorial"]
+        keys_to_reset = [ "name_search", "category_select", "gender_select", "religion_select", "language_select", "body_select", "feeder", "bus", "district_select", "net_select", "full_text_search", "features1", "features2", "features3", "p1_test", "p2-6_test", "p1_exam", "p2-6_exam", "p1_no_exam_radio", "holiday", "tutorial", "class_count_slider"]
         slider_key_names = list(percentage_cols.values())
         keys_to_reset.extend(slider_key_names)
         for key in keys_to_reset:
@@ -335,6 +361,13 @@ try:
                 col_name, min_val = value; 
                 if col_name in filtered_df.columns:
                     filtered_df = filtered_df[filtered_df[col_name] >= min_val]
+            # --- 新增 ---
+            elif filter_type == 'class_count':
+                min_val, max_val = value
+                filtered_df = filtered_df[
+                    (filtered_df['class_count_current_year'] >= min_val) & 
+                    (filtered_df['class_count_current_year'] <= max_val)
+                ]
             elif filter_type == 'max_p1_tests': filtered_df = filtered_df[filtered_df['小一全年測驗次數'] <= int(value)]
             elif filter_type == 'max_p2_6_tests': filtered_df = filtered_df[filtered_df['小二至小六全年測驗次數'] <= int(value)]
             elif filter_type == 'max_p1_exams': filtered_df = filtered_df[filtered_df['小一全年考試次數'] <= int(value)]
@@ -385,6 +418,18 @@ try:
                         st.write(f"**校網:** {school.get('校網', '未提供')}")
                         st.write(f"**校監:** {school.get('校監_校管會主席姓名', '未提供')}")
                         st.write(f"**家教會:** {school.get('has_pta', '未提供')}")
+
+                    # --- 新增 ---
+                    st.markdown("##### **開班數字**")
+                    class_data = {
+                        '學年': ['上學年', '本學年'],
+                        '開班總數': [
+                            school.get('上學年開班總數', '沒有資料'),
+                            school.get('本學年開班總數', '沒有資料')
+                        ]
+                    }
+                    class_df = pd.DataFrame(class_data)
+                    st.table(class_df.set_index('學年'))
 
                     st.write(f"**學校佔地面積:** {school.get('學校佔地面積', '未提供')}")
                     st.write(f"**校車服務:** {school.get('bus_service_text', '沒有')}")
@@ -515,4 +560,3 @@ except FileNotFoundError:
     st.info("請確認您已將正確的 Raw URL 貼入程式碼中。")
 except Exception as e:
     st.error(f"處理資料時發生錯誤：{e}")
-
