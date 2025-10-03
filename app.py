@@ -117,10 +117,10 @@ def process_dataframe(df, articles_df=None, net_df=None):
             s = pd.to_numeric(df[new_col].astype(str).str.replace('%', '', regex=False), errors='coerce').fillna(0)
             df[old_col_name] = s.round(1)
 
-    # --- 新增 ---
-    # 處理開班數字，轉換為數字格式以便篩選
-    if '本學年開班總數' in df.columns:
-        df['class_count_current_year'] = pd.to_numeric(df['本學年開班總數'], errors='coerce')
+    # --- 已修正 ---
+    # 使用您提供的正確欄目名稱 `本學年總班數`
+    if '本學年總班數' in df.columns:
+        df['class_count_current_year'] = pd.to_numeric(df['本學年總班數'], errors='coerce')
     else:
         df['class_count_current_year'] = pd.Series(dtype='float64')
 
@@ -163,7 +163,6 @@ def process_dataframe(df, articles_df=None, net_df=None):
 
 # --- 主要應用程式邏輯 ---
 try:
-    # --- 修改：已換上您最新的 database.xlsx 的 Raw URL ---
     DATA_URL = "https://raw.githubusercontent.com/kingyeung625/hk-school-selector/develop/database.xlsx"
     
     main_dataframe = pd.read_excel(DATA_URL, sheet_name='學校資料', engine='openpyxl')
@@ -295,14 +294,13 @@ try:
         afternoon_tut = st.radio("設下午導修時段？", ['不限', '是', '否'], horizontal=True, key='tutorial')
         if afternoon_tut != '不限': active_filters.append(('afternoon_tut', afternoon_tut))
     
-    # --- 新增 ---
     with st.expander("🔎 按開班數字搜尋", expanded=False):
         if 'class_count_current_year' in processed_df.columns and not processed_df['class_count_current_year'].isnull().all():
             min_val = int(processed_df['class_count_current_year'].min())
             max_val = int(processed_df['class_count_current_year'].max())
             
             selected_range = st.slider(
-                '本學年開班總數',
+                '本學年總班數',
                 min_value=min_val,
                 max_value=max_val,
                 value=(min_val, max_val),
@@ -361,7 +359,6 @@ try:
                 col_name, min_val = value; 
                 if col_name in filtered_df.columns:
                     filtered_df = filtered_df[filtered_df[col_name] >= min_val]
-            # --- 新增 ---
             elif filter_type == 'class_count':
                 min_val, max_val = value
                 filtered_df = filtered_df[
@@ -419,21 +416,36 @@ try:
                         st.write(f"**校監:** {school.get('校監_校管會主席姓名', '未提供')}")
                         st.write(f"**家教會:** {school.get('has_pta', '未提供')}")
 
-                    # --- 新增 ---
-                    st.markdown("##### **開班數字**")
-                    class_data = {
-                        '學年': ['上學年', '本學年'],
-                        '開班總數': [
-                            school.get('上學年開班總數', '沒有資料'),
-                            school.get('本學年開班總數', '沒有資料')
-                        ]
-                    }
-                    class_df = pd.DataFrame(class_data)
-                    st.table(class_df.set_index('學年'))
-
                     st.write(f"**學校佔地面積:** {school.get('學校佔地面積', '未提供')}")
                     st.write(f"**校車服務:** {school.get('bus_service_text', '沒有')}")
                     
+                    # --- 已升級 ---
+                    st.markdown("##### **開班數字**")
+                    class_data = {
+                        ' ': ['小一', '小二', '小三', '小四', '小五', '小六', '**總數**'],
+                        '上學年班數': [
+                            school.get('上學年小一班數', '-'),
+                            school.get('上學年小二班數', '-'),
+                            school.get('上學年小三班數', '-'),
+                            school.get('上學年小四班數', '-'),
+                            school.get('上學年小五班數', '-'),
+                            school.get('上學年小六班數', '-'),
+                            f"**{school.get('上學年總班數', '-')}**"
+                        ],
+                        '本學年班數': [
+                            school.get('本學年小一班數', '-'),
+                            school.get('本學年小二班數', '-'),
+                            school.get('本學年小三班數', '-'),
+                            school.get('本學年小四班數', '-'),
+                            school.get('本學年小五班數', '-'),
+                            school.get('本學年小六班數', '-'),
+                            f"**{school.get('本學年總班數', '-')}**"
+                        ]
+                    }
+                    class_df = pd.DataFrame(class_data).set_index(' ')
+                    st.markdown(class_df.to_html(escape=False), unsafe_allow_html=True)
+                    st.write("") # Add some space
+
                     feeder_schools = {"一條龍中學": school.get('一條龍中學'), "直屬中學": school.get('直屬中學'), "聯繫中學": school.get('聯繫中學')}
                     for title, value in feeder_schools.items():
                         if pd.notna(value) and str(value).strip() not in ['', '沒有']: st.write(f"**{title}:** {value}")
