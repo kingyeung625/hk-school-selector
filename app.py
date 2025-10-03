@@ -30,14 +30,10 @@ def get_article_metadata(url):
         }
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
-        
         soup = BeautifulSoup(response.text, 'html.parser')
-        
         og_image_tag = soup.find('meta', property='og:image')
-        
         if og_image_tag and og_image_tag.get('content'):
             return og_image_tag['content']
-            
     except requests.RequestException:
         return None
     return None
@@ -94,46 +90,34 @@ def process_dataframe(df, articles_df=None):
     df['full_text_search'] = df.astype(str).agg(' '.join, axis=1)
 
     text_columns_for_features = [
-        '學校關注事項', '學習和教學策略', '小學教育課程更新重點的發展', '共通能力的培養', '正確價值觀、態度和行為的培養',
-        '全校參與照顧學生的多樣性', '全校參與模式融合教育', '非華語學生的教育支援', '課程剪裁及調適措施',
-        '家校合作', '校風', '學校發展計劃', '教師專業培訓及發展', '其他未來發展', '辦學宗旨', '全方位學習', '特別室', '其他學校設施'
+        '學校發展計劃', '學習和教學重點', '學校特色', '校風', '辦學宗旨', '全方位學習'
     ]
     existing_feature_columns = [col for col in text_columns_for_features if col in df.columns]
     df['features_text'] = df[existing_feature_columns].fillna('').astype(str).agg(' '.join, axis=1)
-    percentage_cols = [
-        '已接受師資培訓(佔全校教師人數%)', '學士(佔全校教師人數%)', '碩士、博士或以上 (佔全校教師人數%)', '特殊教育培訓 (佔全校教師人數%)',
-        '0-4年資 (佔全校教師人數%)', '5-9年資(佔全校教師人數%)', '10年或以上年資 (佔全校教師人數%)'
-    ]
-    for col in percentage_cols:
-        if col in df.columns:
-            s = pd.to_numeric(df[col].astype(str).str.replace('%', '', regex=False), errors='coerce').fillna(0)
-            if not s.empty and s.max() > 0 and s.max() <= 1: s = s * 100
-            df[col] = s.round(1)
     
-    teacher_count_cols = ['核准編制教師職位數目', '全校教師總人數']
-    for col in teacher_count_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-
-    exam_count_cols = [
-        '一年級全年全科測驗次數', '一年級全年全科考試次數',
-        '二至六年級全年全科測驗次數', '二至六年級全年全科考試次數'
-    ]
-    for col in exam_count_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
-            
-    yes_no_cols = {
-        '小一上學期以多元化的進展性評估代替測驗及考試': 'p1_no_exam_assessment',
-        '避免緊接在長假期後安排測考，讓學生在假期有充分的休息': 'avoid_holiday_exams',
-        '按校情靈活編排時間表，盡量在下午安排導修時段，讓學生能在教師指導下完成部分家課': 'afternoon_tutorial',
-        '家教會': 'has_pta'
+    # 處理百分比欄位
+    percentage_cols = {
+        '上學年已接受師資培訓人數百分率': '已接受師資培訓(佔全校教師人數%)',
+        '上學年學士人數百分率': '學士(佔全校教師人數%)',
+        '上學年碩士_博士或以上人數百分率': '碩士、博士或以上 (佔全校教師人數%)',
+        '上學年特殊教育培訓人數百分率': '特殊教育培訓 (佔全校教師人數%)',
+        '上學年0至4年年資人數百分率': '0-4年資 (佔全校教師人數%)',
+        '上學年5至9年年資人數百分率': '5-9年資(佔全校教師人數%)',
+        '上學年10年年資或以上人數百分率': '10年或以上年資 (佔全校教師人數%)'
     }
-    for col, new_name in yes_no_cols.items():
-        if col in df.columns:
-            df[new_name] = df[col].apply(lambda x: '是' if str(x).strip().lower() in ['有', 'yes'] else '否')
+    for new_col, old_col_name in percentage_cols.items():
+        if new_col in df.columns:
+            s = pd.to_numeric(df[new_col].astype(str).str.replace('%', '', regex=False), errors='coerce').fillna(0)
+            if not s.empty and s.max() > 0 and s.max() <= 1: s = s * 100
+            df[old_col_name] = s.round(1)
+
+    # 處理布林值欄位
+    df['p1_no_exam_assessment'] = df['小一上學期測考'].apply(lambda x: '是' if str(x).strip() == '有' else '否') if '小一上學期測考' in df.columns else '否'
+    df['avoid_holiday_exams'] = df['長假期後測考'].apply(lambda x: '是' if str(x).strip() == '沒有' else '否') if '長假期後測考' in df.columns else '否'
+    df['afternoon_tutorial'] = df['下午家課輔導'].apply(lambda x: '是' if str(x).strip() == '有' else '否') if '下午家課輔導' in df.columns else '否'
+    df['has_pta'] = df['家長教師會'].apply(lambda x: '是' if str(x).strip() == '有' else '否') if '家長教師會' in df.columns else '否'
     
-    if '學校類別' in df.columns:
+    if '學校類別1' in df.columns:
         def standardize_category(cat):
             cat_str = str(cat)
             if '官立' in cat_str: return '官立'
@@ -141,25 +125,26 @@ def process_dataframe(df, articles_df=None):
             if '資助' in cat_str: return '資助'
             if '私立' in cat_str: return '私立'
             return cat
-        df['學校類別'] = df['學校類別'].apply(standardize_category)
+        df['學校類別'] = df['學校類別1'].apply(standardize_category)
+    else:
+        df['學校類別'] = '未提供'
 
-    bus_series = df['校車服務'].fillna('沒有').astype(str) if '校車服務' in df.columns else pd.Series('沒有', index=df.index)
-    has_bus_data = bus_series.str.strip().isin(['', '沒有']) == False
+    # 處理校車/保姆車
+    has_bus = df['校車'].astype(str).str.strip() == '有' if '校車' in df.columns else pd.Series(False, index=df.index)
+    has_nanny = df['保姆車'].astype(str).str.strip() == '有' if '保姆車' in df.columns else pd.Series(False, index=df.index)
     df['has_school_bus'] = '否'
-    df.loc[has_bus_data, 'has_school_bus'] = '是'
+    df.loc[has_bus | has_nanny, 'has_school_bus'] = '是'
     df['bus_service_text'] = '沒有'
-    cond_both = bus_series.str.contains("校車") & bus_series.str.contains("保姆車")
-    cond_bus_only = bus_series.str.contains("校車") & ~bus_series.str.contains("保姆車")
-    cond_nanny_only = ~bus_series.str.contains("校車") & bus_series.str.contains("保姆車")
-    df.loc[cond_both, 'bus_service_text'] = '有校車及保姆車'
-    df.loc[cond_bus_only, 'bus_service_text'] = '有校車'
-    df.loc[cond_nanny_only, 'bus_service_text'] = '有保姆車'
-    
+    df.loc[has_bus & has_nanny, 'bus_service_text'] = '有校車及保姆車'
+    df.loc[has_bus & ~has_nanny, 'bus_service_text'] = '有校車'
+    df.loc[~has_bus & has_nanny, 'bus_service_text'] = '有保姆車'
+
+    # 處理關聯中學
     feeder_cols = ['一條龍中學', '直屬中學', '聯繫中學']
     existing_feeder_cols = [col for col in feeder_cols if col in df.columns]
     if existing_feeder_cols:
          df['has_feeder_school'] = df[existing_feeder_cols].apply(
-            lambda row: '是' if any(pd.notna(val) and str(val).strip() not in ['', '沒有'] for val in row) else '否',
+            lambda row: '是' if any(pd.notna(val) and str(val).strip() not in ['', '沒有']) for val in row) else '否',
             axis=1
         )
     else:
@@ -168,7 +153,8 @@ def process_dataframe(df, articles_df=None):
 
 # --- 主要應用程式邏輯 ---
 try:
-    DATA_URL = "https://raw.githubusercontent.com/kingyeung625/hk-school-selector/3f177778e7a09e9d890e77d07017c2a7364cebb1/school_data_with_articles.xlsx"
+    # !!! 請將下面的 URL 替換為您自己的 GitHub Raw File URL !!!
+    DATA_URL = "https://raw.githubusercontent.com/kingyeung625/hk-school-selector/3f177778e7a09e9d890e77d07017c2a7364cebb1/school_data_with_articles.xlsx" # 範例 URL，請替換
     
     main_dataframe = pd.read_excel(DATA_URL, sheet_name='學校資料', engine='openpyxl')
     
@@ -210,10 +196,7 @@ try:
                 body_df.columns = ['辦學團體', 'count']
                 body_df_sorted = body_df.sort_values(by=['count', '辦學團體'], ascending=[False, True])
                 
-                formatted_body_options = [
-                    f"{row['辦學團體']} ({row['count']})" for index, row in body_df_sorted.iterrows()
-                ]
-                
+                formatted_body_options = [f"{row['辦學團體']} ({row['count']})" for index, row in body_df_sorted.iterrows()]
                 selected_formatted_bodies = st.multiselect("辦學團體", options=formatted_body_options, key="body_select")
                 
                 if selected_formatted_bodies:
@@ -229,13 +212,14 @@ try:
     with st.expander("📍 按地區及校網搜尋", expanded=False):
         col1, col2 = st.columns(2)
         with col1:
-            all_districts = sorted(processed_df['地區'].dropna().unique()); selected_districts = st.multiselect("**選擇地區 (可多選)**", options=all_districts, key="district_select")
+            all_districts = sorted(processed_df['區域'].dropna().unique()); selected_districts = st.multiselect("**選擇地區 (可多選)**", options=all_districts, key="district_select")
             if selected_districts: active_filters.append(('district', selected_districts))
         with col2:
-            if selected_districts: available_nets = sorted(processed_df[processed_df['地區'].isin(selected_districts)]['校網'].dropna().unique())
-            else: available_nets = sorted(processed_df['校網'].dropna().unique())
-            selected_nets = st.multiselect("**選擇校網 (可多選)**", options=available_nets, key="net_select")
-            if selected_nets: active_filters.append(('net', selected_nets))
+            if '小一學校網' in processed_df.columns:
+                net_df = processed_df[processed_df['區域'].isin(selected_districts)] if selected_districts else processed_df
+                available_nets = sorted(net_df['小一學校網'].dropna().unique())
+                selected_nets = st.multiselect("**選擇校網 (可多選)**", options=available_nets, key="net_select")
+                if selected_nets: active_filters.append(('net', selected_nets))
 
     st.markdown(
         '<div style="border: 2px dashed #cccccc; padding: 20px; text-align: center; margin-top: 20px; margin-bottom: 20px;">廣告空間</div>',
@@ -292,12 +276,12 @@ try:
         with col1:
             max_p1_tests = st.selectbox('小一全年最多測驗次數', options=['任何次數', 0, 1, 2, 3, 4], index=0, key='p1_test')
             if max_p1_tests != '任何次數': active_filters.append(('max_p1_tests', max_p1_tests))
-            max_p2_6_tests = st.selectbox('二至六年級最多測驗次數', options=['任何次數', 0, 1, 2, 3, 4], index=0, key='p2-6_test')
+            max_p2_6_tests = st.selectbox('小二至六全年最多測驗次數', options=['任何次數', 0, 1, 2, 3, 4], index=0, key='p2-6_test')
             if max_p2_6_tests != '任何次數': active_filters.append(('max_p2_6_tests', max_p2_6_tests))
         with col2:
             max_p1_exams = st.selectbox('小一全年最多考試次數', options=['任何次數', 0, 1, 2, 3], index=0, key='p1_exam')
             if max_p1_exams != '任何次數': active_filters.append(('max_p1_exams', max_p1_exams))
-            max_p2_6_exams = st.selectbox('二至六年級最多考試次數', options=['任何次數', 0, 1, 2, 3, 4], index=0, key='p2-6_exam')
+            max_p2_6_exams = st.selectbox('小二至六全年最多考試次數', options=['任何次數', 0, 1, 2, 3, 4], index=0, key='p2-6_exam')
             if max_p2_6_exams != '任何次數': active_filters.append(('max_p2_6_exams', max_p2_6_exams))
         st.markdown("**其他安排**"); p1_no_exam = st.radio("小一上學期以多元化評估代替測考？", ['不限', '是', '否'], horizontal=True, key="p1_no_exam_radio")
         if p1_no_exam != '不限': active_filters.append(('p1_no_exam', p1_no_exam))
@@ -314,10 +298,7 @@ try:
             "p1_test", "p2-6_test", "p1_exam", "p2-6_exam", "p1_no_exam_radio",
             "holiday", "tutorial"
         ]
-        slider_key_names = [
-            '已接受師資培訓(佔全校教師人數%)', '學士(佔全校教師人數%)', '碩士、博士或以上 (佔全校教師人數%)', '特殊教育培訓 (佔全校教師人數%)',
-            '0-4年資 (佔全校教師人數%)', '5-9年資(佔全校教師人數%)', '10年或以上年資 (佔全校教師人數%)'
-        ]
+        slider_key_names = list(col1_sliders.keys()) + list(col2_sliders.keys()) + list(col3_sliders.keys())
         keys_to_reset.extend(slider_key_names)
         for key in keys_to_reset:
             if key in st.session_state:
@@ -348,8 +329,8 @@ try:
             elif filter_type == 'full_text':
                 filtered_df = filtered_df[filtered_df['full_text_search'].str.contains(value, case=False, na=False)]
                 all_selected_keywords_for_highlight.append(value)
-            elif filter_type == 'district': filtered_df = filtered_df[filtered_df['地區'].isin(value)]
-            elif filter_type == 'net': filtered_df = filtered_df[filtered_df['校網'].isin(value)]
+            elif filter_type == 'district': filtered_df = filtered_df[filtered_df['區域'].isin(value)]
+            elif filter_type == 'net': filtered_df = filtered_df[filtered_df['小一學校網'].isin(value)]
             elif filter_type == 'features':
                 for option in value:
                     search_terms = [];
@@ -359,11 +340,16 @@ try:
                         regex_pattern = '|'.join([re.escape(term) for term in search_terms])
                         filtered_df = filtered_df[filtered_df['features_text'].str.contains(regex_pattern, case=False, na=False, regex=True)]
             elif filter_type == 'slider':
-                col_name, min_val = value; filtered_df = filtered_df[filtered_df[col_name] >= min_val]
-            elif filter_type == 'max_p1_tests': filtered_df = filtered_df[filtered_df['一年級全年全科測驗次數'] <= int(value)]
-            elif filter_type == 'max_p2_6_tests': filtered_df = filtered_df[filtered_df['二至六年級全年全科測驗次數'] <= int(value)]
-            elif filter_type == 'max_p1_exams': filtered_df = filtered_df[filtered_df['一年級全年全科考試次數'] <= int(value)]
-            elif filter_type == 'max_p2_6_exams': filtered_df = filtered_df[filtered_df['二至六年級全年全科考試次數'] <= int(value)]
+                col_name, min_val = value; 
+                # Use the mapped old column name for filtering
+                old_col_name = next((old for new, old in percentage_cols.items() if new == col_name), col_name)
+                if old_col_name in filtered_df.columns:
+                    filtered_df = filtered_df[filtered_df[old_col_name] >= min_val]
+
+            elif filter_type == 'max_p1_tests': filtered_df = filtered_df[filtered_df['小一全年測驗次數'] <= int(value)]
+            elif filter_type == 'max_p2_6_tests': filtered_df = filtered_df[filtered_df['小二至小六全年測驗次數'] <= int(value)]
+            elif filter_type == 'max_p1_exams': filtered_df = filtered_df[filtered_df['小一全年考試次數'] <= int(value)]
+            elif filter_type == 'max_p2_6_exams': filtered_df = filtered_df[filtered_df['小二至小六全年考試次數'] <= int(value)]
             elif filter_type == 'p1_no_exam': filtered_df = filtered_df[filtered_df['p1_no_exam_assessment'] == value]
             elif filter_type == 'avoid_holiday': filtered_df = filtered_df[filtered_df['avoid_holiday_exams'] == value]
             elif filter_type == 'afternoon_tut': filtered_df = filtered_df[filtered_df['afternoon_tutorial'] == value]
@@ -383,17 +369,14 @@ try:
             page_df = filtered_df.iloc[start_idx:end_idx]
             
             for index, school in page_df.iterrows():
-                with st.expander(f"**{school.get('學校名稱', 'N/A')}** ({school.get('地區', 'N/A')})"):
+                with st.expander(f"**{school.get('學校名稱', 'N/A')}** ({school.get('區域', 'N/A')})"):
                     articles = school.get('articles', [])
                     if articles:
                         st.markdown("#### 📖 相關報導")
                         for title, url in articles:
                             image_url = get_article_metadata(url)
                             if image_url:
-                                st.markdown(
-                                    f'<a href="{url}" target="_blank"><img src="{image_url}" alt="{title}" style="width:100%; max-width:400px; border-radius: 8px; margin-bottom: 5px;"></a>', 
-                                    unsafe_allow_html=True
-                                )
+                                st.markdown(f'<a href="{url}" target="_blank"><img src="{image_url}" alt="{title}" style="width:100%; max-width:400px; border-radius: 8px; margin-bottom: 5px;"></a>', unsafe_allow_html=True)
                                 st.markdown(f'**<a href="{url}" target="_blank" style="text-decoration: none; color: #333;">{title}</a>**', unsafe_allow_html=True)
                             else:
                                 st.markdown(f"- [{title}]({url})")
@@ -405,41 +388,35 @@ try:
                         st.write(f"**學校類別:** {school.get('學校類別', '未提供')}")
                         st.write(f"**辦學團體:** {school.get('辦學團體', '未提供')}")
                         st.write(f"**創校年份:** {school.get('創校年份', '未提供')}")
-                        st.write(f"**校長:** {school.get('校長_', '未提供')}")
+                        st.write(f"**校長:** {school.get('校長姓名', '未提供')}")
                         st.write(f"**教學語言:** {school.get('教學語言', '未提供')}")
                     with info_col2:
                         st.write(f"**學生性別:** {school.get('學生性別', '未提供')}")
                         st.write(f"**宗教:** {school.get('宗教', '未提供')}")
-                        st.write(f"**校網:** {school.get('校網', '未提供')}")
-                        st.write(f"**校監:** {school.get('校監／學校管理委員會主席', '未提供')}")
+                        st.write(f"**校網:** {school.get('小一學校網', '未提供')}")
+                        st.write(f"**校監:** {school.get('校監_校管會主席姓名', '未提供')}")
                         st.write(f"**家教會:** {school.get('has_pta', '未提供')}")
 
                     st.write(f"**學校佔地面積:** {school.get('學校佔地面積', '未提供')}")
-                    st.write(f"**學費/堂費:** {school.get('fees_text', '沒有')}")
                     st.write(f"**校車服務:** {school.get('bus_service_text', '沒有')}")
                     
                     feeder_schools = {"一條龍中學": school.get('一條龍中學'), "直屬中學": school.get('直屬中學'), "聯繫中學": school.get('聯繫中學')}
                     for title, value in feeder_schools.items():
                         if pd.notna(value) and str(value).strip() not in ['', '沒有']: st.write(f"**{title}:** {value}")
                     
-                    st.markdown(
-                        '<div style="border: 2px dashed #cccccc; padding: 15px; text-align: center; margin-top: 15px; margin-bottom: 15px;">廣告空間</div>',
-                        unsafe_allow_html=True
-                    )
-                    
                     st.markdown("---")
                     st.markdown("#### 🏫 學校設施詳情")
                     facility_counts = (f"🏫 課室: {school.get('課室數目', 'N/A')} | 🏛️ 禮堂: {school.get('禮堂數目', 'N/A')} | 🤸 操場: {school.get('操場數目', 'N/A')} | 📚 圖書館: {school.get('圖書館數目', 'N/A')}")
                     st.markdown(facility_counts)
-                    other_facilities = {"特別室": "特別室", "支援有特殊教育需要學生的設施": "SEN 支援設施", "其他學校設施": "其他學校設施"}
+                    other_facilities = {"特別室": "特別室", "支援有特殊教育需要學生的設施": "支援有特殊教育需要學生的設施", "其他學校設施": "其他學校設施"}
                     for column_name, display_title in other_facilities.items():
                         detail_value = school.get(column_name, '');
                         if pd.notna(detail_value) and str(detail_value).strip() not in ['', '沒有']: st.write(f"**{display_title}:** {detail_value}")
                     
                     st.markdown("---")
                     st.markdown("#### 🧑‍🏫 師資團隊概覽")
-                    approved_teachers = school.get('核准編制教師職位數目')
-                    total_teachers = school.get('全校教師總人數')
+                    approved_teachers = school.get('上學年核准編制教師職位數目')
+                    total_teachers = school.get('上學年教師總人數')
                     col1, col2 = st.columns(2)
                     with col1:
                         if pd.isna(approved_teachers):
@@ -464,47 +441,28 @@ try:
                             st.markdown("**學歷分佈**"); edu_data = {'類別': ['學士', '碩士或以上'],'比例': [school.get('學士(佔全校教師人數%)', 0), school.get('碩士、博士或以上 (佔全校教師人數%)', 0)]}; edu_df = pd.DataFrame(edu_data)
                             if edu_df['比例'].sum() > 0:
                                 fig1 = px.pie(edu_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Greens_r)
-                                fig1.update_layout(
-                                    showlegend=False, margin=dict(l=70, r=70, t=40, b=40), height=380, font=dict(size=16),
-                                    uniformtext_minsize=14, uniformtext_mode='hide'
-                                )
+                                fig1.update_layout(showlegend=False, margin=dict(l=70, r=70, t=40, b=40), height=380, font=dict(size=16), uniformtext_minsize=14, uniformtext_mode='hide')
                                 fig1.update_traces(textposition='inside', textinfo='percent+label', textfont_color='white'); st.plotly_chart(fig1, use_container_width=True, key=f"edu_pie_{index}")
                             else: st.text("無相關數據")
                         with pie_col2:
                             st.markdown("**年資分佈**"); exp_data = {'類別': ['0-4年', '5-9年', '10年以上'],'比例': [school.get('0-4年資 (佔全校教師人數%)', 0), school.get('5-9年資(佔全校教師人數%)', 0), school.get('10年或以上年資 (佔全校教師人數%)', 0)]}; exp_df = pd.DataFrame(exp_data)
                             if exp_df['比例'].sum() > 0:
                                 fig2 = px.pie(exp_df, values='比例', names='類別', color_discrete_sequence=px.colors.sequential.Blues_r)
-                                fig2.update_layout(
-                                    showlegend=False, margin=dict(l=70, r=70, t=40, b=40), height=380, font=dict(size=16),
-                                    uniformtext_minsize=14, uniformtext_mode='hide'
-                                )
+                                fig2.update_layout(showlegend=False, margin=dict(l=70, r=70, t=40, b=40), height=380, font=dict(size=16), uniformtext_minsize=14, uniformtext_mode='hide')
                                 fig2.update_traces(textposition='inside', textinfo='percent+label', textfont_color='white'); st.plotly_chart(fig2, use_container_width=True, key=f"exp_pie_{index}")
                             else: st.text("無相關數據")
-                    
-                    st.markdown(
-                        '<div style="border: 2px dashed #cccccc; padding: 15px; text-align: center; margin-top: 15px; margin-bottom: 15px;">廣告空間</div>',
-                        unsafe_allow_html=True
-                    )
-
                     st.markdown("---")
                     st.markdown("#### 📚 課業與評估安排")
-                    homework_details = {"小一測驗/考試次數": f"{school.get('一年級全年全科測驗次數', 'N/A')} / {school.get('一年級全年全科考試次數', 'N/A')}", "高年級測驗/考試次數": f"{school.get('二至六年級全年全科測驗次數', 'N/A')} / {school.get('二至六年級全年全科考試次數', 'N/A')}", "小一免試評估": school.get('p1_no_exam_assessment', 'N/A'), "多元學習評估": school.get('多元學習評估', '未提供'), "避免長假後測考": school.get('avoid_holiday_exams', 'N/A'), "下午導修時段": school.get('afternoon_tutorial', 'N/A')}
+                    homework_details = {"小一測驗/考試次數": f"{school.get('小一全年測驗次數', 'N/A')} / {school.get('小一全年考試次數', 'N/A')}", "高年級測驗/考試次數": f"{school.get('小二至小六全年測驗次數', 'N/A')} / {school.get('小二至小六全年考試次數', 'N/A')}", "小一免試評估": school.get('p1_no_exam_assessment', 'N/A'), "多元學習評估": school.get('多元學習評估', '未提供'), "避免長假後測考": school.get('avoid_holiday_exams', 'N/A'), "下午導修時段": school.get('afternoon_tutorial', 'N/A')}
                     for title, value in homework_details.items():
                         if pd.notna(value) and str(value).strip() != '': st.write(f"**{title}:** {value}")
                     
                     st.markdown("---")
                     st.markdown("#### ✨ 辦學特色與發展計劃")
-                    feature_text_map = {
-                        "學校關注事項": "學校關注事項", "學習和教學策略": "學習和教學策略", "小學教育課程更新重點的發展": "課程更新重點", 
-                        "共通能力的培養": "共通能力培養", "正確價值觀、態度和行為的培養": "價值觀培養", "全校參與照顧學生的多樣性": "照顧學生多樣性",
-                        "全校參與模式融合教育": "融合教育模式", "非華語學生的教育支援": "非華語學生支援", "課程剪裁及調適措施": "課程剪裁調適",
-                        "家校合作": "家校合作", "校風": "校風", "學校發展計劃": "學校發展計劃", "教師專業培訓及發展": "教師專業發展", 
-                        "其他未來發展": "其他未來發展"
-                    }
+                    feature_text_map = {"學校發展計劃": "學校發展計劃", "學習和教學重點": "學習和教學重點", "學校特色": "學校特色"}
                     for column_name, display_title in feature_text_map.items():
                         detail_value = school.get(column_name, '')
                         if pd.notna(detail_value) and str(detail_value).strip() not in ['', '沒有']:
-                            
                             should_expand = False
                             if all_selected_keywords_for_highlight:
                                 text_to_check = str(detail_value).lower()
@@ -520,38 +478,18 @@ try:
                             with st.expander(f"**{display_title}**", expanded=should_expand):
                                 formatted_content = format_and_highlight_text(detail_value, all_selected_keywords_for_highlight)
                                 st.markdown(formatted_content, unsafe_allow_html=True)
-                        
-                        # --- 新增：在指定位置插入廣告空間 ---
-                        if column_name == "全校參與照顧學生的多樣性":
-                            st.markdown(
-                                '<div style="border: 2px dashed #cccccc; padding: 15px; text-align: center; margin-top: 15px; margin-bottom: 15px;">廣告空間</div>',
-                                unsafe_allow_html=True
-                            )
-                    
-                    st.markdown(
-                        '<div style="border: 2px dashed #cccccc; padding: 15px; text-align: center; margin-top: 15px; margin-bottom: 15px;">廣告空間</div>',
-                        unsafe_allow_html=True
-                    )
 
             st.markdown("---")
             col1, col2, col3 = st.columns([1, 1, 1])
-            
             with col1:
                 st.button("重設搜尋器", on_click=reset_filters, key="reset_button_bottom")
             
             if total_pages > 1:
                 page_selection_col, next_button_col = st.columns([2,1])
                 with page_selection_col:
-                    # 使用 selectbox 來選擇頁數
                     page_options = [f"第 {i+1} 頁" for i in range(total_pages)]
                     current_page_label = f"第 {st.session_state.page + 1} 頁"
-                    new_page_label = st.selectbox(
-                        "頁數",
-                        options=page_options,
-                        index=st.session_state.page,
-                        label_visibility="collapsed"
-                    )
-                    # 偵測 selectbox 的變化
+                    new_page_label = st.selectbox("頁數", options=page_options, index=st.session_state.page, label_visibility="collapsed")
                     if new_page_label != current_page_label:
                         st.session_state.page = page_options.index(new_page_label)
                         st.rerun()
@@ -561,8 +499,6 @@ try:
                         st.button("⬅️ 上一頁", on_click=lambda: st.session_state.update(page=st.session_state.page - 1), key="prev_page", use_container_width=True)
                      if st.session_state.page < total_pages - 1:
                         st.button("下一頁 ➡️", on_click=lambda: st.session_state.update(page=st.session_state.page + 1), key="next_page", use_container_width=True)
-
-
 except FileNotFoundError:
     st.error(f"錯誤：找不到資料檔案 '{DATA_URL}'。")
     st.info("請確認您已將正確的 Raw URL 貼入程式碼中。")
