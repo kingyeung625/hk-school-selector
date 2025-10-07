@@ -35,17 +35,24 @@ def get_article_metadata(url):
         if og_image and og_image.get('content'):
             return og_image['content']
     except requests.RequestException as e:
-        # st.error(f"無法獲取文章圖片: {e}")
         return None
     return None
 
-# --- 資料載入與處理 ---
+# --- 資料載入與處理 (已修正檔案路徑問題) ---
 @st.cache_data
 def process_dataframe():
-    # 改為讀取本地端 CSV 檔案
-    df_school_info = pd.read_csv("database.xlsx - 學校資料.csv")
-    df_articles = pd.read_csv("database.xlsx - 相關文章.csv")
-    df_school_net = pd.read_csv("database.xlsx - 校網資料.csv")
+    # 獲取目前 app.py 檔案所在的資料夾路徑
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # 將資料夾路徑與檔案名稱組合成完整的絕對路徑
+    school_info_path = os.path.join(script_dir, "database.xlsx - 學校資料.csv")
+    articles_path = os.path.join(script_dir, "database.xlsx - 相關文章.csv")
+    school_net_path = os.path.join(script_dir, "database.xlsx - 校網資料.csv")
+
+    # 使用絕對路徑讀取 CSV 檔案
+    df_school_info = pd.read_csv(school_info_path)
+    df_articles = pd.read_csv(articles_path)
+    df_school_net = pd.read_csv(school_net_path)
 
     # 數據合併
     df = pd.merge(df_school_info, df_articles, on='學校名稱', how='left')
@@ -202,15 +209,14 @@ if search_button or st.session_state.active_filters_cache:
     if st.session_state.total_classes != (0, 100):
         active_filters.append({'type': 'total_classes', 'value': st.session_state.total_classes})
     
-    # 快取篩選條件
     if search_button:
         st.session_state.active_filters_cache = active_filters
-        st.session_state.page = 0 # 重置頁碼
+        st.session_state.page = 0
     else:
         active_filters = st.session_state.active_filters_cache
 
     filtered_df = processed_df.copy()
-    for f in active_filters:
+    for f in (active_filters or []):
         if f['type'] == 'school_name':
             filtered_df = filtered_df[filtered_df['學校名稱'].str.contains(f['value'], case=False)]
         elif f['type'] == 'school_category':
@@ -244,56 +250,38 @@ if search_button or st.session_state.active_filters_cache:
         elif f['type'] == 'total_classes':
             filtered_df = filtered_df[filtered_df['上學年總班數'].replace('-', '0').astype(int).between(f['value'][0], f['value'][1])]
 
-    # ==================================================================
-    # ===== 新增功能：顯示目前的篩選條件總結 =====
-    # ==================================================================
     if active_filters:
         st.markdown("---")
         with st.container(border=True):
             st.subheader("目前的篩選條件：")
             
             filter_labels = {
-                'school_name': '學校名稱',
-                'school_category': '學校類別',
-                'gender': '學生性別',
-                'religion': '宗教',
-                'district': '地區',
-                'school_net': '校網',
-                'has_school_bus': '設有校車服務',
-                'has_feeder_school': '設有一條龍/直屬/聯繫中學',
-                'has_pta': '設有家長教師會',
-                'p1_no_exam': '小一不設測考',
-                'afternoon_tutorial': '設下午功課輔導班',
-                'avoid_holiday_exams': '避免假期後測考',
-                'features_text': '介紹關鍵字',
-                'master_doctor_ratio': '碩士/博士教師比例',
-                'senior_teacher_ratio': '10年以上年資教師比例',
-                'total_classes': '總班數'
+                'school_name': '學校名稱', 'school_category': '學校類別', 'gender': '學生性別',
+                'religion': '宗教', 'district': '地區', 'school_net': '校網',
+                'has_school_bus': '設有校車服務', 'has_feeder_school': '設有一條龍/直屬/聯繫中學',
+                'has_pta': '設有家長教師會', 'p1_no_exam': '小一不設測考',
+                'afternoon_tutorial': '設下午功課輔導班', 'avoid_holiday_exams': '避免假期後測考',
+                'features_text': '介紹關鍵字', 'master_doctor_ratio': '碩士/博士教師比例',
+                'senior_teacher_ratio': '10年以上年資教師比例', 'total_classes': '總班數'
             }
             
-            summary_cols = st.columns(3) # 分三欄顯示，讓版面更緊湊
+            summary_cols = st.columns(3)
             col_index = 0
 
             for f in active_filters:
                 label = filter_labels.get(f['type'], f['type'].replace('_', ' ').title())
                 value = f['value']
                 
-                if isinstance(value, list):
-                    value_str = ", ".join(map(str, value))
+                if isinstance(value, list): value_str = ", ".join(map(str, value))
                 elif isinstance(value, tuple):
-                    if 'ratio' in f['type']: # 處理百分比滑桿
-                         value_str = f"{value[0]}% - {value[1]}%"
-                    else:
-                         value_str = f"{value[0]} - {value[1]}"
-                else:
-                    value_str = str(value)
+                    if 'ratio' in f['type']: value_str = f"{value[0]}% - {value[1]}%"
+                    else: value_str = f"{value[0]} - {value[1]}"
+                else: value_str = str(value)
                 
                 with summary_cols[col_index % 3]:
                     st.markdown(f"**{label}:** {value_str}")
-
                 col_index += 1
 
-    # --- 顯示搜尋結果 ---
     st.markdown("---")
     total_schools = len(filtered_df)
     st.success(f"找到 {total_schools} 所符合條件的學校。")
@@ -301,35 +289,23 @@ if search_button or st.session_state.active_filters_cache:
     if total_schools > 0:
         items_per_page = 5
         total_pages = (total_schools + items_per_page - 1) // items_per_page
-        
         start_idx = st.session_state.page * items_per_page
         end_idx = start_idx + items_per_page
-        
         paginated_df = filtered_df.iloc[start_idx:end_idx]
 
         def format_and_highlight_text(text, keyword):
-            if not isinstance(text, str) or text == '-':
-                return "沒有提供相關資料。"
-            
-            # 將分點符號（如數字、破折號）轉換為列表項目
+            if not isinstance(text, str) or text == '-': return "沒有提供相關資料。"
             text = re.sub(r'(\d+\.)', r'\n- \1', text)
             text = text.replace('。', '。\n- ')
-            
             if keyword:
-                try:
-                    text = re.sub(f"({re.escape(keyword)})", r"<mark>\1</mark>", text, flags=re.IGNORECASE)
-                except re.error:
-                    pass # 忽略無效的正則表達式
-            
+                try: text = re.sub(f"({re.escape(keyword)})", r"<mark>\1</mark>", text, flags=re.IGNORECASE)
+                except re.error: pass
             lines = [line.strip() for line in text.split('\n') if line.strip()]
-            formatted_lines = [f"<li>{line.replace('- ', '', 1)}</li>" for line in lines if not line.startswith('- ')]
-            formatted_lines += [f"<li>{line.replace('- ', '', 1)}</li>" for line in lines if line.startswith('- ')]
-            
+            formatted_lines = [f"<li>{line.replace('- ', '', 1)}</li>" for line in lines]
             return f"<ul>{''.join(formatted_lines)}</ul>" if formatted_lines else "沒有提供相關資料。"
 
         for index, row in paginated_df.iterrows():
             st.markdown(f"### {row['學校名稱']}")
-            
             col1, col2 = st.columns([1, 2])
             with col1:
                 st.write(f"**地區:** {row['地區']}")
@@ -337,62 +313,42 @@ if search_button or st.session_state.active_filters_cache:
                 st.write(f"**學校類別:** {row['學校類別']}")
                 st.write(f"**學生性別:** {row['學生性別']}")
                 st.write(f"**宗教:** {row['宗教']}")
-                
             with col2:
                 if row['文章標題'] != '-':
                     st.write(f"**相關文章:**")
                     article_url = row['文章連結']
                     image_url = get_article_metadata(article_url)
-                    
                     if image_url:
                         img_col, title_col = st.columns([1, 3])
-                        with img_col:
-                            st.image(image_url, width=100)
-                        with title_col:
-                            st.markdown(f"[{row['文章標題']}]({article_url})")
+                        with img_col: st.image(image_url, width=100)
+                        with title_col: st.markdown(f"[{row['文章標題']}]({article_url})")
                     else:
                         st.markdown(f"[{row['文章標題']}]({article_url})")
             
             with st.expander("顯示/隱藏詳細資料"):
                 st.markdown("<h5>辦學宗旨</h5>", unsafe_allow_html=True)
                 st.markdown(format_and_highlight_text(row.get('辦學宗旨'), st.session_state.get('features_text_search')), unsafe_allow_html=True)
-                
                 st.markdown("<h5>師資資料 (2023/24學年)</h5>", unsafe_allow_html=True)
                 c1, c2, c3 = st.columns(3)
                 c1.metric("碩士/博士或以上學歷", f"{row['上學年碩士_博士或以上人數百分率']}%")
                 c2.metric("10年或以上年資", f"{row['上學年10年年資或以上人數百分率']}%")
                 c3.metric("總班級數量", f"{row['上學年總班數']}")
-
                 st.markdown("<h5>學校特色</h5>", unsafe_allow_html=True)
                 st.markdown(format_and_highlight_text(row.get('學校特色'), st.session_state.get('features_text_search')), unsafe_allow_html=True)
-
             st.markdown("---")
             
-        # --- 分頁導航 ---
         if total_pages > 1:
-            st.markdown(
-                f"<div style='text-align: center; font-size: 1.1em;'>頁數: {st.session_state.page + 1} / {total_pages}</div>",
-                unsafe_allow_html=True
-            )
-
+            st.markdown(f"<div style='text-align: center; font-size: 1.1em;'>頁數: {st.session_state.page + 1} / {total_pages}</div>", unsafe_allow_html=True)
             prev_col, page_select_col, next_col = st.columns([2, 3, 2])
-
             with prev_col:
                 if st.session_state.page > 0:
                     st.button("⬅️ 上一頁", on_click=lambda: st.session_state.update(page=st.session_state.page - 1), key=f"prev_{st.session_state.page}", use_container_width=True)
-
             with page_select_col:
                 page_options = range(1, total_pages + 1)
-                current_page_selection = st.selectbox(
-                    "跳至頁數",
-                    options=page_options,
-                    index=st.session_state.page,
-                    label_visibility="collapsed"
-                )
+                current_page_selection = st.selectbox("跳至頁數", options=page_options, index=st.session_state.page, label_visibility="collapsed")
                 if (current_page_selection - 1) != st.session_state.page:
                     st.session_state.page = current_page_selection - 1
                     st.rerun()
-
             with next_col:
                 if st.session_state.page < total_pages - 1:
                     st.button("下一頁 ➡️", on_click=lambda: st.session_state.update(page=st.session_state.page + 1), key=f"next_{st.session_state.page}", use_container_width=True)
