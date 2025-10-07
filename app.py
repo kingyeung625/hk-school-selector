@@ -41,10 +41,11 @@ def get_article_metadata(url):
 # --- 資料載入與處理 (已改為從 GitHub Raw URL 讀取 Excel) ---
 @st.cache_data
 def process_dataframe():
-    # 直接從 GitHub Raw URL 讀取整個 Excel 檔案
+    # 直接從您提供的 GitHub Raw URL 讀取整個 Excel 檔案
     excel_url = "https://raw.githubusercontent.com/kingyeung625/hk-school-selector/49f313227f13f1a6989a92b5ce77fd8df4b13c8b/database.xlsx"
     
     try:
+        # 從單一 Excel 檔案讀取所有需要的工作表
         df_school_info = pd.read_excel(excel_url, sheet_name='學校資料')
         df_articles = pd.read_excel(excel_url, sheet_name='相關文章')
         df_school_net = pd.read_excel(excel_url, sheet_name='校網資料')
@@ -56,17 +57,15 @@ def process_dataframe():
     df = pd.merge(df_school_info, df_articles, on='學校名稱', how='left')
     df = pd.merge(df, df_school_net[['學校名稱', '地區', '校網']], on='學校名稱', how='left')
 
-    # 數據清洗與轉換
+    # 數據清洗與轉換 (與您之前的版本完全相同)
     df.fillna('-', inplace=True)
     df.replace('--', '-', inplace=True)
     df.replace('沒有', '-', inplace=True)
     df.replace('不適用', '-', inplace=True)
 
-    # 建立全文搜尋欄位
     text_columns = df.columns.drop(['學校名稱', '文章標題', '文章連結'])
     df['full_text_search'] = df[text_columns].astype(str).agg(' '.join, axis=1)
 
-    # 建立學校特色搜尋欄位
     feature_cols = [
         '學校特色', '辦學宗旨', '校訓', '教學模式', '校本課程', '關鍵項目的發展',
         '全方位學習', '學校設施', '其他學習經歷', '學與教策略'
@@ -76,20 +75,17 @@ def process_dataframe():
             df[col] = ''
     df['features_text'] = df[feature_cols].astype(str).agg(' '.join, axis=1)
 
-    # 處理百分比欄位
     percentage_cols = [
         '上學年已接受師資培訓人數百分率', '上學年學士人數百分率', '上學年碩士_博士或以上人數百分率',
         '上學年特殊教育培訓人數百分率', '上學年0至4年年資人數百分率',
         '上學年5至9年年資人數百分率', '上學年10年年資或以上人數百分率'
     ]
     for col in percentage_cols:
-        # 檢查欄位是否存在
         if col in df.columns:
             df[col] = df[col].astype(str).str.replace('%', '').replace('-', '0').astype(float)
         else:
-            df[col] = 0 # 如果欄位不存在，則給予預設值0
+            df[col] = 0
 
-    # 建立衍生的特色欄位
     df['p1_no_exam_assessment'] = df['小一測驗及考試次數'].apply(lambda x: '是' if str(x) in ['0', '0-0'] else '否') if '小一測驗及考試次數' in df.columns else '否'
     df['avoid_holiday_exams'] = df['測考及學習調適措施'].str.contains('避免在假期後舉行測驗或考試', na=False).map({True: '是', False: '否'}) if '測考及學習調適措施' in df.columns else '否'
     df['afternoon_tutorial'] = df['支援學生的學業及個人發展的措施'].str.contains('設有下午功課輔導班', na=False).map({True: '是', False: '否'}) if '支援學生的學業及個人發展的措施' in df.columns else '否'
@@ -97,13 +93,13 @@ def process_dataframe():
     df['has_school_bus'] = df['校車'].apply(lambda x: '是' if x == '校車服務' else '否') if '校車' in df.columns else '否'
     df['has_feeder_school'] = df.apply(lambda row: '是' if ('一條龍中學' in row and row['一條龍中學'] != '-') or ('直屬中學' in row and row['直屬中學'] != '-') or ('聯繫中學' in row and row['聯繫中學'] != '-') else '否', axis=1)
 
-    # 標準化學校類別
     if '學校類別1' in df.columns:
         def standardize_category(row):
-            if '資助' in row['學校類別1']: return '資助'
-            if '直資' in row['學校類別1']: return '直資'
-            if '私立' in row['學校類別1']: return '私立'
-            if '官立' in row['學校類別1']: return '官立'
+            cat_str = str(row['學校類別1'])
+            if '資助' in cat_str: return '資助'
+            if '直資' in cat_str: return '直資'
+            if '私立' in cat_str: return '私立'
+            if '官立' in cat_str: return '官立'
             return '其他'
         df['學校類別'] = df.apply(standardize_category, axis=1)
     else:
@@ -115,7 +111,7 @@ processed_df = process_dataframe()
 
 # --- 只有在 DataFrame 成功載入後才顯示 UI ---
 if not processed_df.empty:
-    # --- 篩選器 UI ---
+    # --- 篩選器 UI (您的介面，維持不變) ---
     with st.expander("按學校名稱搜尋", expanded=True):
         st.text_input("輸入學校名稱關鍵字", key="school_name_search")
 
@@ -152,12 +148,10 @@ if not processed_df.empty:
     with st.expander("班級數目"):
         max_class_val = 0
         if '上學年總班數' in processed_df.columns:
-            # 確保欄位是數字且處理非數字錯誤
             numeric_classes = pd.to_numeric(processed_df['上學年總班數'], errors='coerce').dropna()
             if not numeric_classes.empty:
                 max_class_val = int(numeric_classes.max())
         st.slider("總班數", 0, max_class_val if max_class_val > 0 else 100, (0, 100), key="total_classes")
-
 
     def reset_filters():
         st.session_state.school_name_search = ""
@@ -187,8 +181,6 @@ if not processed_df.empty:
 
     if search_button or st.session_state.active_filters_cache:
         active_filters = []
-        # (此處的篩選邏輯與之前版本相同，故省略以節省篇幅)
-        # ...
         if st.session_state.school_name_search: active_filters.append({'type': 'school_name', 'value': st.session_state.school_name_search})
         if st.session_state.school_category: active_filters.append({'type': 'school_category', 'value': st.session_state.school_category})
         if st.session_state.gender_options: active_filters.append({'type': 'gender', 'value': st.session_state.gender_options})
@@ -230,7 +222,6 @@ if not processed_df.empty:
             elif f['type'] == 'master_doctor_ratio': filtered_df = filtered_df[filtered_df['上學年碩士_博士或以上人數百分率'].between(f['value'][0], f['value'][1])]
             elif f['type'] == 'senior_teacher_ratio': filtered_df = filtered_df[filtered_df['上學年10年年資或以上人數百分率'].between(f['value'][0], f['value'][1])]
             elif f['type'] == 'total_classes':
-                # 確保篩選時也處理非數字錯誤
                 numeric_classes = pd.to_numeric(filtered_df['上學年總班數'], errors='coerce')
                 filtered_df = filtered_df[numeric_classes.between(f['value'][0], f['value'][1])]
 
@@ -291,7 +282,7 @@ if not processed_df.empty:
                     st.write(f"**學生性別:** {row.get('學生性別', '-')}")
                     st.write(f"**宗教:** {row.get('宗教', '-')}")
                 with col2:
-                    if '文章標題' in row and row['文章標題'] != '-':
+                    if '文章標題' in row and pd.notna(row['文章標題']) and row['文章標題'] != '-':
                         st.write(f"**相關文章:**")
                         article_url = row['文章連結']
                         image_url = get_article_metadata(article_url)
